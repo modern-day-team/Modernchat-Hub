@@ -86,6 +86,12 @@ web/
 | GET | `/api/v1/services/:id/update/check` | 检查目标服务新版本（经 kind 对应 adapter） |
 | GET | `/api/v1/services/:id/update/status` | 目标更新任务状态快照（轮询） |
 | POST | `/api/v1/services/:id/update/start` | 触发目标在线更新（异步） |
+| GET | `/api/v1/services/:id/admin/stats` | 目标服务概览统计（统一管理后台，经 adapter 代理） |
+| GET | `/api/v1/services/:id/admin/users` | 目标用户分页列表（page/pageSize/kw/role/status） |
+| POST | `/api/v1/services/:id/admin/users/:uid/ban` | 封禁目标用户（`{days:0-3650, reason?}`，0=永久） |
+| POST | `/api/v1/services/:id/admin/users/:uid/unban` | 解封 |
+| POST | `/api/v1/services/:id/admin/users/:uid/kick` | 强制下线（不封禁，返回 wasOnline） |
+| POST | `/api/v1/services/:id/admin/users/:uid/reset-password` | 目标端随机重置密码（一次性明文） |
 
 ## 约定
 

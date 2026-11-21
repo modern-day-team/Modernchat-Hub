@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0（2026-11-21）
+
+- feat(adapter)：统一管理后台落地——`adapter.Adminer` 窄接口（Stats/Users/Ban/Unban/Kick/ResetPassword）与 `Registry` 双能力注册（更新 + 管理）；`modernchatnew.go` 代理主仓库站长 API `/api/admin/{stats,users,users/:id/{ban,unban,kick,reset-password}}`（响应形状逐字段对齐主仓库需求规格 §3.2，指针字段 nil 归一）
+- feat(server)：管理操作编排进 `InstanceService`（解析 adminer → 解密凭据 → 代理调用，日志只记实例名/动作/目标 id）；REST 端点 `GET /api/v1/services/:id/admin/{stats,users}`、`POST .../admin/users/:uid/{ban,unban,kick,reset-password}`；分页与筛选参数归一（page≥1、pageSize 1–100、kw≤50、role/status 枚举收敛、days 0–3650）；重置密码的一次性明文只在响应出现，不落库不进日志
+- feat(web)：服务行新增「管理」入口（kind=modernchat-new）——远程管理对话框：概览统计 8 卡、用户表（搜索/角色/状态筛选 + 分页）、封禁（天数 0=永久 + 原因）/解封/强制下线/重置密码（一次性明文提示只显示一次）
+- fix(server)：`ErrKindUnknown` 文案通用化为「该服务类型不支持此操作」（更新与管理两域共用）；`server/.env.example` 补 `GIN_MODE`
+- 端到端验证（node 假主仓库）：统计归一（conversations=15=10+5）、用户行指针字段归一、封禁体 `{days,reason}` 到达目标、kick `wasOnline`、重置密码明文回传、generic 优雅降级 400
+- 版本同步：`web/package.json` 0.4.0
+
 ## 0.3.0（2026-11-21）
 
 - perf(server)：GORM 连接池对齐主仓库（MaxOpen 200 / MaxIdle 50 / ConnMaxLifetime 1h，兜底突发并避免坏连接）；`TranslateError` 把唯一键冲突转为 `gorm.ErrDuplicatedKey`（注册/实例重名并发兜底映射 409）；gin 模式由 `GIN_MODE` 控制且**默认 release**（去 debug 告警与路由打印）；HTTP server 补 `IdleTimeout 90s` + `ReadHeaderTimeout 10s`（项目组口径：防 Slowloris、回收 keep-alive，不设整体读写超时以免误杀长连接）
