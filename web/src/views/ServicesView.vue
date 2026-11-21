@@ -10,6 +10,7 @@ import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import ServiceAdminDialog from '@/components/ServiceAdminDialog.vue'
 import { useInstancesStore } from '@/stores/instances'
 import type { ServiceInstance, UpdateCheck, UpdateStatus } from '@/types'
 
@@ -216,6 +217,9 @@ async function doStart() {
 function modeText(mode: string) {
   return mode === 'release' ? t('upd.modeRelease') : mode === 'source' ? t('upd.modeSource') : mode
 }
+
+// ── 远程管理（统一管理后台，kind 有对应 adminer 时可用） ──
+const adminTarget = ref<ServiceInstance | null>(null)
 </script>
 
 <template>
@@ -273,6 +277,15 @@ function modeText(mode: string) {
                 @click="openUpdate(inst)"
               >
                 {{ t('svc.rowUpdate') }}
+              </UiButton>
+              <UiButton
+                v-if="inst.kind === 'modernchat-new'"
+                variant="text"
+                theme="primary"
+                size="small"
+                @click="adminTarget = inst"
+              >
+                {{ t('svc.rowAdmin') }}
               </UiButton>
               <UiButton variant="text" size="small" @click="openEdit(inst)">{{ t('svc.rowEdit') }}</UiButton>
               <UiButton variant="text" theme="danger" size="small" @click="deleteTarget = inst">
@@ -403,6 +416,9 @@ function modeText(mode: string) {
         <p class="ui-hint">{{ t('upd.hint') }}</p>
       </div>
     </UiDialog>
+
+    <!-- 远程管理（统一管理后台：代理目标服务站长 API） -->
+    <ServiceAdminDialog :visible="adminTarget !== null" :instance="adminTarget" @update:visible="(v: boolean) => { if (!v) adminTarget = null }" />
   </div>
 </template>
 

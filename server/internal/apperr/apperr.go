@@ -20,8 +20,8 @@ var (
 	ErrBadBaseURL       = errors.New("Base URL 不合法：须为 http/https 且含主机名")
 	ErrAuthType         = errors.New("鉴权方式仅支持 none 或 bearer")
 
-	// 更新 adapter 域（对目标服务操作的语义；具体原因经 %w 包装透传）
-	ErrKindUnknown       = errors.New("该服务类型不支持更新操作")
+	// adapter 对目标服务操作的语义；具体原因经 %w 包装透传
+	ErrKindUnknown       = errors.New("该服务类型不支持此操作")
 	ErrTargetUnreachable = errors.New("目标服务不可达")
 	ErrTargetAuth        = errors.New("目标服务凭据无效或权限不足")
 	ErrUpdateUnsupported = errors.New("目标服务不支持在线更新")

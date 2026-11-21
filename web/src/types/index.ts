@@ -63,3 +63,39 @@ export interface ProbeAllResultSummary {
   fail: number
   results: ProbeAllResult[]
 }
+
+/** 目标服务概览统计（经 adapter 归一） */
+export interface TargetAdminStats {
+  usersTotal: number
+  usersToday: number
+  usersBanned: number
+  usersAdmins: number
+  conversations: number
+  messagesTotal: number
+  messagesToday: number
+  pluginsInstalled: number
+  online: number
+  uptimeSeconds: number
+  goVersion?: string
+}
+
+/** 目标服务用户行（adapter 归一，凭据类字段不透传） */
+export interface TargetAdminUser {
+  id: number
+  username: string
+  nickname: string
+  avatarColor?: string
+  email?: string
+  role: 'user' | 'admin'
+  bannedUntil?: string
+  banReason?: string
+  createdAt?: string
+}
+
+/** 目标服务用户分页 */
+export interface TargetAdminUserPage {
+  users: TargetAdminUser[]
+  total: number
+  page: number
+  pageSize: number
+}

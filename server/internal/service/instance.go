@@ -422,3 +422,138 @@ func (s *InstanceService) UpdateStart(id uint) error {
 	slog.Info("已触发远程更新", "instance", inst.Name, "kind", inst.Kind)
 	return nil
 }
+
+// ── 管理操作编排（统一管理后台：经 adminer 代理目标服务站长 API）──
+
+// resolveAdminer 按实例的服务类型解析管理 adapter；未注册的 kind（含 generic）一律不支持。
+func (s *InstanceService) resolveAdminer(inst *model.ServiceInstance) (adapter.Adminer, error) {
+	if s.updates == nil {
+		return nil, apperr.ErrKindUnknown
+	}
+	a, ok := s.updates.Adminer(inst.Kind)
+	if !ok {
+		return nil, apperr.ErrKindUnknown
+	}
+	return a, nil
+}
+
+// AdminStats 目标服务概览统计。
+func (s *InstanceService) AdminStats(id uint) (*adapter.AdminStats, error) {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return nil, err
+	}
+	a, err := s.resolveAdminer(inst)
+	if err != nil {
+		return nil, err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return nil, err
+	}
+	return a.Stats(inst.BaseURL, token)
+}
+
+// AdminUsers 目标服务用户分页列表（筛选参数已由 handler 归一）。
+func (s *InstanceService) AdminUsers(id uint, page, pageSize int, kw, role, status string) (*adapter.AdminUserPage, error) {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return nil, err
+	}
+	a, err := s.resolveAdminer(inst)
+	if err != nil {
+		return nil, err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return nil, err
+	}
+	return a.Users(inst.BaseURL, token, page, pageSize, kw, role, status)
+}
+
+// AdminBan 封禁目标用户（days=0 永久）。
+func (s *InstanceService) AdminBan(id, targetUserID uint, days int, reason string) error {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return err
+	}
+	a, err := s.resolveAdminer(inst)
+	if err != nil {
+		return err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return err
+	}
+	if err := a.Ban(inst.BaseURL, token, targetUserID, days, reason); err != nil {
+		return err
+	}
+	// 管理操作记 info 日志（只记实例名、动作与目标 id，不记凭据与原因全文）
+	slog.Info("管理操作：封禁", "instance", inst.Name, "targetUser", targetUserID, "days", days)
+	return nil
+}
+
+// AdminUnban 解封目标用户。
+func (s *InstanceService) AdminUnban(id, targetUserID uint) error {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return err
+	}
+	a, err := s.resolveAdminer(inst)
+	if err != nil {
+		return err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return err
+	}
+	if err := a.Unban(inst.BaseURL, token, targetUserID); err != nil {
+		return err
+	}
+	slog.Info("管理操作：解封", "instance", inst.Name, "targetUser", targetUserID)
+	return nil
+}
+
+// AdminKick 强制下线目标用户（不封禁），返回目标端 wasOnline。
+func (s *InstanceService) AdminKick(id, targetUserID uint) (bool, error) {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return false, err
+	}
+	a, err := s.resolveAdminer(inst)
+	if err != nil {
+		return false, err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return false, err
+	}
+	wasOnline, err := a.Kick(inst.BaseURL, token, targetUserID)
+	if err != nil {
+		return false, err
+	}
+	slog.Info("管理操作：强制下线", "instance", inst.Name, "targetUser", targetUserID, "wasOnline", wasOnline)
+	return wasOnline, nil
+}
+
+// AdminResetPassword 目标端随机重置密码（返回一次性明文，Hub 不落库不记日志）。
+func (s *InstanceService) AdminResetPassword(id, targetUserID uint) (string, error) {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return "", err
+	}
+	a, err := s.resolveAdminer(inst)
+	if err != nil {
+		return "", err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return "", err
+	}
+	pwd, err := a.ResetPassword(inst.BaseURL, token, targetUserID)
+	if err != nil {
+		return "", err
+	}
+	slog.Info("管理操作：重置密码", "instance", inst.Name, "targetUser", targetUserID)
+	return pwd, nil
+}

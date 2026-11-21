@@ -4,6 +4,7 @@
 package adapter
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,35 +43,112 @@ type Updater interface {
 	Start(baseURL, token string) error
 }
 
-// Registry 服务类型 → 更新 adapter 的注册表（组合根是唯一装配点）。
+// AdminStats 目标服务概览统计（已归一，跨服务口径一致）。
+type AdminStats struct {
+	UsersTotal       int64  `json:"usersTotal"`
+	UsersToday       int64  `json:"usersToday"`
+	UsersBanned      int64  `json:"usersBanned"`
+	UsersAdmins      int64  `json:"usersAdmins"`
+	Conversations    int64  `json:"conversations"` // 单聊 + 群聊
+	MessagesTotal    int64  `json:"messagesTotal"`
+	MessagesToday    int64  `json:"messagesToday"`
+	PluginsInstalled int64  `json:"pluginsInstalled"`
+	Online           int64  `json:"online"`
+	UptimeSeconds    int64  `json:"uptimeSeconds"`
+	GoVersion        string `json:"goVersion,omitempty"`
+}
+
+// AdminUser 目标服务的用户行（归一化；敏感字段不透传）。
+type AdminUser struct {
+	ID          uint   `json:"id"`
+	Username    string `json:"username"`
+	Nickname    string `json:"nickname"`
+	AvatarColor string `json:"avatarColor,omitempty"`
+	Email       string `json:"email,omitempty"`
+	Role        string `json:"role"`
+	BannedUntil string `json:"bannedUntil,omitempty"`
+	BanReason   string `json:"banReason,omitempty"`
+	CreatedAt   string `json:"createdAt,omitempty"`
+}
+
+// AdminUserPage 目标服务用户分页。
+type AdminUserPage struct {
+	Users    []AdminUser `json:"users"`
+	Total    int64       `json:"total"`
+	Page     int         `json:"page"`
+	PageSize int         `json:"pageSize"`
+}
+
+// Adminer 管理操作窄接口：把目标服务的站长后台能力代理到 Hub（统一管理后台）。
+// token 是已解密的目标服务管理员凭据；adapter 只做协议翻译，不写业务规则。
+type Adminer interface {
+	Kind() string
+	Stats(baseURL, token string) (*AdminStats, error)
+	Users(baseURL, token string, page, pageSize int, kw, role, status string) (*AdminUserPage, error)
+	Ban(baseURL, token string, userID uint, days int, reason string) error
+	Unban(baseURL, token string, userID uint) error
+	Kick(baseURL, token string, userID uint) (bool, error)
+	ResetPassword(baseURL, token string, userID uint) (string, error)
+}
+
+// Registry 服务类型 → adapter 的注册表（更新与管理双能力；组合根是唯一装配点）。
 type Registry struct {
-	mu     sync.RWMutex
-	byKind map[string]Updater
+	mu       sync.RWMutex
+	updaters map[string]Updater
+	adminers map[string]Adminer
 }
 
 // NewRegistry 构造空注册表。
 func NewRegistry() *Registry {
-	return &Registry{byKind: map[string]Updater{}}
+	return &Registry{updaters: map[string]Updater{}, adminers: map[string]Adminer{}}
 }
 
-// Register 注册 adapter（同 kind 后注册者覆盖）。
-func (r *Registry) Register(u Updater) {
+// RegisterUpdater 注册更新能力（同 kind 后注册者覆盖）。
+func (r *Registry) RegisterUpdater(u Updater) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.byKind[u.Kind()] = u
+	r.updaters[u.Kind()] = u
 }
 
-// Updater 按 kind 取 adapter。
+// RegisterAdmin 注册管理操作能力（同 kind 后注册者覆盖）。
+func (r *Registry) RegisterAdmin(a Adminer) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.adminers[a.Kind()] = a
+}
+
+// Updater 按 kind 取更新 adapter。
 func (r *Registry) Updater(kind string) (Updater, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	u, ok := r.byKind[kind]
+	u, ok := r.updaters[kind]
 	return u, ok
+}
+
+// Adminer 按 kind 取管理 adapter。
+func (r *Registry) Adminer(kind string) (Adminer, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	a, ok := r.adminers[kind]
+	return a, ok
 }
 
 // requestJSON 发起带可选 Bearer 凭据的请求并把 2xx 响应解析进 out（out 传 nil 表示忽略响应体）。
 func requestJSON(client *http.Client, method, rawURL, token string, out any) error {
-	req, err := http.NewRequest(method, rawURL, nil)
+	return requestJSONBody(client, method, rawURL, token, nil, out)
+}
+
+// requestJSONBody 同 requestJSON，但可携带 JSON 请求体（body 非 nil 时序列化发送）。
+func requestJSONBody(client *http.Client, method, rawURL, token string, body, out any) error {
+	var reader io.Reader
+	if body != nil {
+		buf, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("%w：%s", apperr.ErrTargetUnreachable, err)
+		}
+		reader = bytes.NewReader(buf)
+	}
+	req, err := http.NewRequest(method, rawURL, reader)
 	if err != nil {
 		return apperr.ErrTargetUnreachable
 	}
@@ -78,6 +156,9 @@ func requestJSON(client *http.Client, method, rawURL, token string, out any) err
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w：%s", apperr.ErrTargetUnreachable, err)

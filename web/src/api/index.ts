@@ -1,5 +1,13 @@
 import { http } from './client'
-import type { ProbeAllResultSummary, ServiceInstance, UpdateCheck, UpdateStatus, User } from '@/types'
+import type {
+  ProbeAllResultSummary,
+  ServiceInstance,
+  TargetAdminStats,
+  TargetAdminUserPage,
+  UpdateCheck,
+  UpdateStatus,
+  User,
+} from '@/types'
 
 /** 服务实例表单载荷（camelCase，与后端 handler 契约一致；token 空值=保持原凭据） */
 export interface ServiceUpsert {
@@ -39,4 +47,24 @@ export const servicesApi = {
   updateCheck: (id: number) => http.get<UpdateCheck>(`/services/${id}/update/check`),
   updateStatus: (id: number) => http.get<UpdateStatus>(`/services/${id}/update/status`),
   updateStart: (id: number) => http.post<{ started: boolean }>(`/services/${id}/update/start`),
+  /** 统一管理后台：代理目标服务站长 API（经 kind 对应 adapter） */
+  adminStats: (id: number) => http.get<TargetAdminStats>(`/services/${id}/admin/stats`),
+  adminUsers: (
+    id: number,
+    params: { page: number; pageSize: number; kw?: string; role?: string; status?: string },
+  ) => {
+    const q = new URLSearchParams({ page: String(params.page), pageSize: String(params.pageSize) })
+    if (params.kw) q.set('kw', params.kw)
+    if (params.role) q.set('role', params.role)
+    if (params.status) q.set('status', params.status)
+    return http.get<TargetAdminUserPage>(`/services/${id}/admin/users?${q.toString()}`)
+  },
+  adminBan: (id: number, uid: number, body: { days: number; reason?: string }) =>
+    http.post<{ ok: boolean }>(`/services/${id}/admin/users/${uid}/ban`, body),
+  adminUnban: (id: number, uid: number) =>
+    http.post<{ ok: boolean }>(`/services/${id}/admin/users/${uid}/unban`),
+  adminKick: (id: number, uid: number) =>
+    http.post<{ ok: boolean; wasOnline: boolean }>(`/services/${id}/admin/users/${uid}/kick`),
+  adminResetPassword: (id: number, uid: number) =>
+    http.post<{ newPassword: string }>(`/services/${id}/admin/users/${uid}/reset-password`),
 }

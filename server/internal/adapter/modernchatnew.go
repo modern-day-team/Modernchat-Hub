@@ -2,7 +2,10 @@ package adapter
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -86,4 +89,166 @@ func (a *ModernchatNew) Start(baseURL, token string) error {
 		return errors.New("目标服务未确认启动更新")
 	}
 	return nil
+}
+
+// ── 管理操作（Adminer）：代理主仓库站长后台 /api/admin/* ──
+
+// targetStatsView 主仓库 GET /api/admin/stats 的响应形状（需求规格 §3.2）。
+type targetStatsView struct {
+	Users struct {
+		Total  int64 `json:"total"`
+		Today  int64 `json:"today"`
+		Banned int64 `json:"banned"`
+		Admins int64 `json:"admins"`
+	} `json:"users"`
+	Conversations struct {
+		Single int64 `json:"single"`
+		Group  int64 `json:"group"`
+	} `json:"conversations"`
+	Messages struct {
+		Total int64 `json:"total"`
+		Today int64 `json:"today"`
+	} `json:"messages"`
+	Plugins struct {
+		Installed int64 `json:"installed"`
+		Enabled   int64 `json:"enabled"`
+		Disabled  int64 `json:"disabled"`
+	} `json:"plugins"`
+	Online        int64  `json:"online"`
+	UptimeSeconds int64  `json:"uptimeSeconds"`
+	GoVersion     string `json:"goVersion"`
+}
+
+// Stats 实现 Adminer：目标概览统计。
+func (a *ModernchatNew) Stats(baseURL, token string) (*AdminStats, error) {
+	var r targetStatsView
+	if err := requestJSON(a.http, http.MethodGet, joinURL(baseURL, "/api/admin/stats"), token, &r); err != nil {
+		return nil, err
+	}
+	return &AdminStats{
+		UsersTotal:       r.Users.Total,
+		UsersToday:       r.Users.Today,
+		UsersBanned:      r.Users.Banned,
+		UsersAdmins:      r.Users.Admins,
+		Conversations:    r.Conversations.Single + r.Conversations.Group,
+		MessagesTotal:    r.Messages.Total,
+		MessagesToday:    r.Messages.Today,
+		PluginsInstalled: r.Plugins.Installed,
+		Online:           r.Online,
+		UptimeSeconds:    r.UptimeSeconds,
+		GoVersion:        r.GoVersion,
+	}, nil
+}
+
+// targetAdminUser 主仓库用户行（AdminUserRow = User + createdAt；指针字段 nil 时不出现）。
+type targetAdminUser struct {
+	ID          uint    `json:"id"`
+	Username    string  `json:"username"`
+	Nickname    string  `json:"nickname"`
+	AvatarColor string  `json:"avatarColor"`
+	Email       *string `json:"email"`
+	Role        string  `json:"role"`
+	BannedUntil *string `json:"bannedUntil"`
+	BanReason   *string `json:"banReason"`
+	CreatedAt   string  `json:"createdAt"`
+}
+
+func (u targetAdminUser) normalize() AdminUser {
+	out := AdminUser{
+		ID:          u.ID,
+		Username:    u.Username,
+		Nickname:    u.Nickname,
+		AvatarColor: u.AvatarColor,
+		Role:        u.Role,
+		CreatedAt:   u.CreatedAt,
+	}
+	if u.Email != nil {
+		out.Email = *u.Email
+	}
+	if u.BannedUntil != nil {
+		out.BannedUntil = *u.BannedUntil
+	}
+	if u.BanReason != nil {
+		out.BanReason = *u.BanReason
+	}
+	return out
+}
+
+// targetAdminUserPage 主仓库 GET /api/admin/users 的响应形状。
+type targetAdminUserPage struct {
+	Users    []targetAdminUser `json:"users"`
+	Total    int64             `json:"total"`
+	Page     int               `json:"page"`
+	PageSize int               `json:"pageSize"`
+}
+
+// Users 实现 Adminer：目标用户分页列表（kw / role / status 筛选透传）。
+func (a *ModernchatNew) Users(baseURL, token string, page, pageSize int, kw, role, status string) (*AdminUserPage, error) {
+	q := url.Values{}
+	q.Set("page", strconv.Itoa(page))
+	q.Set("pageSize", strconv.Itoa(pageSize))
+	if kw != "" {
+		q.Set("kw", kw)
+	}
+	if role != "" {
+		q.Set("role", role)
+	}
+	if status != "" {
+		q.Set("status", status)
+	}
+	var r targetAdminUserPage
+	if err := requestJSON(a.http, http.MethodGet, joinURL(baseURL, "/api/admin/users?"+q.Encode()), token, &r); err != nil {
+		return nil, err
+	}
+	out := &AdminUserPage{Total: r.Total, Page: r.Page, PageSize: r.PageSize, Users: make([]AdminUser, 0, len(r.Users))}
+	for _, u := range r.Users {
+		out.Users = append(out.Users, u.normalize())
+	}
+	return out, nil
+}
+
+// Ban 实现 Adminer：封禁目标用户（days=0 永久）。
+func (a *ModernchatNew) Ban(baseURL, token string, userID uint, days int, reason string) error {
+	body := map[string]any{"days": days}
+	if reason != "" {
+		body["reason"] = reason
+	}
+	var r struct {
+		OK bool `json:"ok"`
+	}
+	return requestJSONBody(a.http, http.MethodPost, joinURL(baseURL, fmt.Sprintf("/api/admin/users/%d/ban", userID)), token, body, &r)
+}
+
+// Unban 实现 Adminer：解封。
+func (a *ModernchatNew) Unban(baseURL, token string, userID uint) error {
+	var r struct {
+		OK bool `json:"ok"`
+	}
+	return requestJSONBody(a.http, http.MethodPost, joinURL(baseURL, fmt.Sprintf("/api/admin/users/%d/unban", userID)), token, map[string]any{}, &r)
+}
+
+// Kick 实现 Adminer：强制下线（不封禁），返回目标端 wasOnline。
+func (a *ModernchatNew) Kick(baseURL, token string, userID uint) (bool, error) {
+	var r struct {
+		OK        bool `json:"ok"`
+		WasOnline bool `json:"wasOnline"`
+	}
+	if err := requestJSONBody(a.http, http.MethodPost, joinURL(baseURL, fmt.Sprintf("/api/admin/users/%d/kick", userID)), token, map[string]any{}, &r); err != nil {
+		return false, err
+	}
+	return r.WasOnline, nil
+}
+
+// ResetPassword 实现 Adminer：目标端随机重置密码（返回一次性明文，Hub 不落库）。
+func (a *ModernchatNew) ResetPassword(baseURL, token string, userID uint) (string, error) {
+	var r struct {
+		NewPassword string `json:"newPassword"`
+	}
+	if err := requestJSONBody(a.http, http.MethodPost, joinURL(baseURL, fmt.Sprintf("/api/admin/users/%d/reset-password", userID)), token, map[string]any{}, &r); err != nil {
+		return "", err
+	}
+	if r.NewPassword == "" {
+		return "", errors.New("目标服务未返回新密码")
+	}
+	return r.NewPassword, nil
 }

@@ -46,11 +46,13 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	authH := handler.NewAuthHandler(accounts, cfg.CookieSecure)
 	authMw := middleware.Auth(accounts) // *service.AccountService 满足窄接口 Authenticator
 
-	// 更新 adapter 注册表：项目组特化能力在此装配；内核不感知具体项目组服务
+	// adapter 注册表：项目组特化能力在此装配；内核不感知具体项目组服务
 	updates := adapter.NewRegistry()
-	updates.Register(adapter.NewModernchatNew())
+	mcn := adapter.NewModernchatNew()
+	updates.RegisterUpdater(mcn)
+	updates.RegisterAdmin(mcn)
 	instancesSvc := service.NewInstanceService(instances, box, updates)
-	instH := handler.NewInstanceHandler(instancesSvc, instancesSvc)
+	instH := handler.NewInstanceHandler(instancesSvc, instancesSvc, instancesSvc)
 
 	v1 := r.Group("/api/v1")
 	// TODO(限流)：注册/登录挂 IP 级限流 + 账号级失败锁定（参照主仓库 middleware/limiter.go）；
@@ -76,6 +78,14 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	admin.GET("/services/:id/update/check", instH.UpdateCheck)   // 检查新版本
 	admin.GET("/services/:id/update/status", instH.UpdateStatus) // 更新任务状态（轮询）
 	admin.POST("/services/:id/update/start", instH.UpdateStart)  // 触发在线更新
+
+	// 管理操作子资源（统一管理后台：代理目标服务站长 API；未注册 kind → 400）
+	admin.GET("/services/:id/admin/stats", instH.AdminStats)
+	admin.GET("/services/:id/admin/users", instH.AdminUsers)
+	admin.POST("/services/:id/admin/users/:uid/ban", instH.AdminBan)
+	admin.POST("/services/:id/admin/users/:uid/unban", instH.AdminUnban)
+	admin.POST("/services/:id/admin/users/:uid/kick", instH.AdminKick)
+	admin.POST("/services/:id/admin/users/:uid/reset-password", instH.AdminResetPassword)
 
 	return r
 }

@@ -399,7 +399,7 @@ func TestUpdateOrchestration(t *testing.T) {
 	stub := &stubUpdater{kind: "modernchat-new", check: &adapter.UpdateCheck{
 		CurrentVersion: "v1.0.0", LatestVersion: "v1.1.0", UpdateAvailable: true,
 	}}
-	reg.Register(stub)
+	reg.RegisterUpdater(stub)
 	svc, _ := newTestServiceWith(reg)
 
 	// bearer 实例：adapter 应收到解密后的明文凭据
@@ -442,7 +442,7 @@ func TestUpdateOrchestration(t *testing.T) {
 
 func TestUpdateUnknownKind(t *testing.T) {
 	reg := adapter.NewRegistry()
-	reg.Register(&stubUpdater{kind: "modernchat-new"})
+	reg.RegisterUpdater(&stubUpdater{kind: "modernchat-new"})
 	svc, _ := newTestServiceWith(reg)
 
 	// generic：无 adapter，更新操作一律不支持
@@ -472,11 +472,122 @@ func TestUpdateAdapterErrorPassthrough(t *testing.T) {
 	// adapter 返回的语义哨兵应原样上抛（handler 负责状态码映射）
 	reg := adapter.NewRegistry()
 	stub := &stubUpdater{kind: "modernchat-new", err: apperr.ErrTargetAuth}
-	reg.Register(stub)
+	reg.RegisterUpdater(stub)
 	svc, _ := newTestServiceWith(reg)
 
 	inst, _ := svc.Create("modernchat-new", "mcn", "http://10.0.0.9", "none", "", "", true, "")
 	if _, err := svc.UpdateCheck(inst.ID); !errors.Is(err, apperr.ErrTargetAuth) {
 		t.Fatalf("adapter 错误应透传: %v", err)
+	}
+}
+
+// ── 管理操作编排（统一管理后台）──
+
+// stubAdminer 假管理 adapter：记录收到的 base/token 与动作参数。
+type stubAdminer struct {
+	kind              string
+	gotBase, gotToken string
+	stats             *adapter.AdminStats
+	users             *adapter.AdminUserPage
+	bannedID, kicked  uint
+	resetID           uint
+	newPassword       string
+	err               error
+}
+
+func (a *stubAdminer) Kind() string { return a.kind }
+
+func (a *stubAdminer) Stats(baseURL, token string) (*adapter.AdminStats, error) {
+	a.gotBase, a.gotToken = baseURL, token
+	return a.stats, a.err
+}
+
+func (a *stubAdminer) Users(baseURL, token string, page, pageSize int, kw, role, status string) (*adapter.AdminUserPage, error) {
+	a.gotBase, a.gotToken = baseURL, token
+	return a.users, a.err
+}
+
+func (a *stubAdminer) Ban(baseURL, token string, userID uint, _ int, _ string) error {
+	a.gotBase, a.gotToken, a.bannedID = baseURL, token, userID
+	return a.err
+}
+
+func (a *stubAdminer) Unban(baseURL, token string, userID uint) error { return a.err }
+
+func (a *stubAdminer) Kick(baseURL, token string, userID uint) (bool, error) {
+	a.gotBase, a.gotToken, a.kicked = baseURL, token, userID
+	return true, a.err
+}
+
+func (a *stubAdminer) ResetPassword(baseURL, token string, userID uint) (string, error) {
+	a.resetID = userID
+	return a.newPassword, a.err
+}
+
+// 编译期断言：假管理 adapter 满足窄接口。
+var _ adapter.Adminer = (*stubAdminer)(nil)
+
+func TestAdminOrchestration(t *testing.T) {
+	reg := adapter.NewRegistry()
+	adminer := &stubAdminer{
+		kind:  "modernchat-new",
+		stats: &adapter.AdminStats{UsersTotal: 42, Online: 3, MessagesTotal: 1024},
+		users: &adapter.AdminUserPage{Total: 1, Page: 1, PageSize: 20, Users: []adapter.AdminUser{
+			{ID: 7, Username: "alice", Nickname: "Alice", Role: "user"},
+		}},
+		newPassword: "Rand0mPwd12",
+	}
+	reg.RegisterAdmin(adminer)
+	svc, _ := newTestServiceWith(reg)
+
+	// bearer 实例：adapter 应收到解密后的明文凭据
+	inst, err := svc.Create("modernchat-new", "admin-mcn", "http://10.0.0.8", "bearer", "target-admin-token", "", true, "")
+	if err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+
+	stats, err := svc.AdminStats(inst.ID)
+	if err != nil {
+		t.Fatalf("AdminStats() 出错: %v", err)
+	}
+	if stats.UsersTotal != 42 || stats.Online != 3 {
+		t.Fatalf("统计透传不符: %+v", stats)
+	}
+	if adminer.gotBase != inst.BaseURL || adminer.gotToken != "target-admin-token" {
+		t.Fatalf("adapter 应收到 base 与解密后的凭据: base=%q token=%q", adminer.gotBase, adminer.gotToken)
+	}
+
+	page, err := svc.AdminUsers(inst.ID, 1, 20, "ali", "", "")
+	if err != nil {
+		t.Fatalf("AdminUsers() 出错: %v", err)
+	}
+	if page.Total != 1 || len(page.Users) != 1 || page.Users[0].Username != "alice" {
+		t.Fatalf("用户分页透传不符: %+v", page)
+	}
+
+	if err := svc.AdminBan(inst.ID, 7, 3, "违规"); err != nil {
+		t.Fatalf("AdminBan() 出错: %v", err)
+	}
+	if adminer.bannedID != 7 {
+		t.Fatalf("封禁应作用于目标用户 7: %d", adminer.bannedID)
+	}
+
+	wasOnline, err := svc.AdminKick(inst.ID, 7)
+	if err != nil || !wasOnline {
+		t.Fatalf("AdminKick() = %v, %v", wasOnline, err)
+	}
+
+	pwd, err := svc.AdminResetPassword(inst.ID, 7)
+	if err != nil || pwd != "Rand0mPwd12" || adminer.resetID != 7 {
+		t.Fatalf("AdminResetPassword() = %q, %v", pwd, err)
+	}
+
+	// generic 实例：无 adminer
+	g, _ := svc.Create("", "generic-admin", "http://10.0.0.7", "none", "", "", true, "")
+	if _, err := svc.AdminStats(g.ID); !errors.Is(err, apperr.ErrKindUnknown) {
+		t.Fatalf("generic 应返回 ErrKindUnknown: %v", err)
+	}
+	if err := svc.AdminBan(g.ID, 1, 3, ""); !errors.Is(err, apperr.ErrKindUnknown) {
+		t.Fatalf("generic 封禁应返回 ErrKindUnknown: %v", err)
 	}
 }
