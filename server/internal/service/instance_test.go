@@ -1,0 +1,308 @@
+package service
+
+import (
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"gorm.io/gorm"
+
+	"github.com/modern-day-team/Modernchat-Hub/server/internal/apperr"
+	"github.com/modern-day-team/Modernchat-Hub/server/internal/crypto"
+	"github.com/modern-day-team/Modernchat-Hub/server/internal/model"
+)
+
+// 编译期断言：假仓储满足 service 消费方定义的窄接口。
+var _ instanceRepo = (*stubRepo)(nil)
+
+// stubRepo 假仓储：内存实现 instanceRepo 窄接口，不依赖 MySQL。
+type stubRepo struct {
+	mu        sync.Mutex
+	byID      map[uint]*model.ServiceInstance
+	nextID    uint
+	probes    []string // 记录每次 SaveProbeResult 的 status
+	notFoundX bool     // 置 true 时 SaveProbeResult 返回错误（模拟 DB 故障）
+}
+
+func newStubRepo() *stubRepo {
+	return &stubRepo{byID: map[uint]*model.ServiceInstance{}, nextID: 1}
+}
+
+func (r *stubRepo) List() ([]model.ServiceInstance, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]model.ServiceInstance, 0, len(r.byID))
+	for _, i := range r.byID {
+		out = append(out, *i)
+	}
+	return out, nil
+}
+
+func (r *stubRepo) FindByID(id uint) (*model.ServiceInstance, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if i, ok := r.byID[id]; ok {
+		cp := *i
+		return &cp, nil
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (r *stubRepo) FindByName(name string) (*model.ServiceInstance, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, i := range r.byID {
+		if i.Name == name {
+			cp := *i
+			return &cp, nil
+		}
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (r *stubRepo) Create(i *model.ServiceInstance) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	i.ID = r.nextID
+	r.nextID++
+	r.byID[i.ID] = i
+	return nil
+}
+
+func (r *stubRepo) Save(i *model.ServiceInstance) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.byID[i.ID] = i
+	return nil
+}
+
+func (r *stubRepo) Delete(id uint) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.byID, id)
+	return nil
+}
+
+func (r *stubRepo) SaveProbeResult(id uint, status string, _ *string, _ time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.notFoundX {
+		return errors.New("db down")
+	}
+	r.probes = append(r.probes, status)
+	return nil
+}
+
+var jwtSecretForTest = "test-jwt-secret-0123456789abcdef-0123456789"
+
+func newTestService() (*InstanceService, *stubRepo) {
+	repo := newStubRepo()
+	return NewInstanceService(repo, crypto.NewBox("", jwtSecretForTest)), repo
+}
+
+func TestCreateValidation(t *testing.T) {
+	svc, _ := newTestService()
+
+	cases := []struct {
+		name    string
+		create  func() error
+		wantErr error
+	}{
+		{"空名称", func() error { _, err := svc.Create("  ", "http://x.local", "none", "", "", true, ""); return err }, apperr.ErrInvalidInput},
+		{"超长名称", func() error {
+			_, err := svc.Create(strings.Repeat("名", 31), "http://x.local", "none", "", "", true, "")
+			return err
+		}, apperr.ErrInvalidInput},
+		{"非 http 协议", func() error { _, err := svc.Create("a", "ftp://x.local", "none", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
+		{"缺主机名", func() error { _, err := svc.Create("a", "http://", "none", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
+		{"未知鉴权方式", func() error { _, err := svc.Create("a", "http://x.local", "basic", "", "", true, ""); return err }, apperr.ErrAuthType},
+		{"bearer 缺凭据", func() error { _, err := svc.Create("a", "http://x.local", "bearer", "", "", true, ""); return err }, apperr.ErrInvalidInput},
+	}
+	for _, tc := range cases {
+		if err := tc.create(); !errors.Is(err, tc.wantErr) {
+			t.Fatalf("%s: got %v, want %v", tc.name, err, tc.wantErr)
+		}
+	}
+}
+
+func TestCreateDefaultsAndUnique(t *testing.T) {
+	svc, _ := newTestService()
+
+	inst, err := svc.Create(" hub-self ", "http://127.0.0.1:8091/", "none", "", "healthz", false, " 说明 ")
+	if err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+	if inst.Name != "hub-self" {
+		t.Fatalf("名称应去空格: %q", inst.Name)
+	}
+	if inst.HealthPath != "/healthz" {
+		t.Fatalf("健康路径应补前导斜杠: %q", inst.HealthPath)
+	}
+	if inst.LastStatus != "unknown" {
+		t.Fatalf("初始状态应为 unknown: %q", inst.LastStatus)
+	}
+	if inst.Enabled {
+		t.Fatal("enabled=false 应被保留")
+	}
+
+	// 空健康路径 → 默认 /api/health
+	inst2, err := svc.Create("other", "http://127.0.0.1:8092", "none", "", "", true, "")
+	if err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+	if inst2.HealthPath != DefaultHealthPath {
+		t.Fatalf("默认健康路径应为 %s: %q", DefaultHealthPath, inst2.HealthPath)
+	}
+
+	// 重名 → 409
+	if _, err := svc.Create("hub-self", "http://127.0.0.1:8093", "none", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
+		t.Fatalf("重名应返回 ErrNameTaken: %v", err)
+	}
+}
+
+func TestCreateBearerSealsToken(t *testing.T) {
+	svc, _ := newTestService()
+	box := crypto.NewBox("", jwtSecretForTest)
+
+	inst, err := svc.Create("authed", "http://10.0.0.1", "bearer", "plain-token", "", true, "")
+	if err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+	if inst.TokenCiphertext == "" || inst.TokenCiphertext == "plain-token" {
+		t.Fatal("凭据应加密落库且不等于明文")
+	}
+	if plain, err := box.Open(inst.TokenCiphertext); err != nil || plain != "plain-token" {
+		t.Fatalf("密文应可解回明文: plain=%q err=%v", plain, err)
+	}
+}
+
+func TestUpdateKeepsTokenWhenEmpty(t *testing.T) {
+	svc, _ := newTestService()
+	inst, err := svc.Create("a", "http://10.0.0.1", "bearer", "old-token", "", true, "")
+	if err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+
+	updated, err := svc.Update(inst.ID, "a2", "http://10.0.0.2", "bearer", "", "/api/health", false, "改备注")
+	if err != nil {
+		t.Fatalf("Update() 出错: %v", err)
+	}
+	if updated.TokenCiphertext == "" {
+		t.Fatal("token 空值应保持原凭据")
+	}
+	if !strings.Contains(updated.Note, "改备注") {
+		t.Fatalf("备注应更新: %q", updated.Note)
+	}
+
+	// 改成已有名称 → 409
+	if _, err := svc.Create("b", "http://10.0.0.3", "none", "", "", true, ""); err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+	if _, err := svc.Update(inst.ID, "b", "http://10.0.0.2", "none", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
+		t.Fatalf("改成重名应返回 ErrNameTaken: %v", err)
+	}
+}
+
+func TestGetDeleteNotFound(t *testing.T) {
+	svc, _ := newTestService()
+	if _, err := svc.Get(999); !errors.Is(err, apperr.ErrInstanceNotFound) {
+		t.Fatalf("Get 不存在应返回 ErrInstanceNotFound: %v", err)
+	}
+	if err := svc.Delete(999); err != nil {
+		t.Fatalf("Delete 不存在应幂等成功: %v", err)
+	}
+}
+
+func TestProbeAgainstFakeServer(t *testing.T) {
+	var hitHealth, hitVersion bool
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/healthz":
+			hitHealth = true
+			w.WriteHeader(http.StatusOK)
+		case "/api/version":
+			hitVersion = true
+			_, _ = w.Write([]byte(`{"version":"9.9.9","commit":"abc","buildTime":"now"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	svc, repo := newTestService()
+	inst, err := svc.Create("fake", ts.URL, "none", "", "/healthz", true, "")
+	if err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+
+	got, err := svc.Probe(inst.ID)
+	if err != nil {
+		t.Fatalf("Probe() 出错: %v", err)
+	}
+	if !hitHealth || !hitVersion {
+		t.Fatalf("健康与版本端点都应被访问: health=%v version=%v", hitHealth, hitVersion)
+	}
+	if got.LastStatus != "ok" {
+		t.Fatalf("探测应 ok: %q", got.LastStatus)
+	}
+	if got.LastVersion == nil || *got.LastVersion != "9.9.9" {
+		t.Fatalf("应记录版本 9.9.9: %v", got.LastVersion)
+	}
+	if got.LastCheckAt == nil {
+		t.Fatal("LastCheckAt 应被写入")
+	}
+	if len(repo.probes) != 1 || repo.probes[0] != "ok" {
+		t.Fatalf("探测结果应写回仓储: %v", repo.probes)
+	}
+}
+
+func TestProbeFailuresAreData(t *testing.T) {
+	// 500 → fail（版本端点缺失也应 ok，版本可选）
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/health" {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	svc, _ := newTestService()
+	inst, _ := svc.Create("bad", ts.URL, "none", "", "/api/health", true, "")
+	got, err := svc.Probe(inst.ID)
+	if err != nil {
+		t.Fatalf("探测失败应作为数据返回，而不是错误: %v", err)
+	}
+	if got.LastStatus != "fail" {
+		t.Fatalf("应记录 fail: %q", got.LastStatus)
+	}
+
+	// 连不上 → fail
+	inst2, _ := svc.Create("dead", "http://127.0.0.1:1", "none", "", "/healthz", true, "")
+	got2, err := svc.Probe(inst2.ID)
+	if err != nil {
+		t.Fatalf("探测失败应作为数据返回，而不是错误: %v", err)
+	}
+	if got2.LastStatus != "fail" {
+		t.Fatalf("连不上应记录 fail: %q", got2.LastStatus)
+	}
+
+	// 版本端点 404 时健康 ok → ok 但版本为空
+	tsOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK) // /api/version 返回 200 但 body 不是 JSON
+	}))
+	defer tsOK.Close()
+	svc2, _ := newTestService()
+	inst3, _ := svc2.Create("ok-only", tsOK.URL, "none", "", "/api/health", true, "")
+	got3, err := svc2.Probe(inst3.ID)
+	if err != nil || got3.LastStatus != "ok" {
+		t.Fatalf("健康 ok 应整体 ok: status=%q err=%v", got3.LastStatus, err)
+	}
+	if got3.LastVersion != nil {
+		t.Fatalf("版本解析失败应为 nil: %v", got3.LastVersion)
+	}
+}
