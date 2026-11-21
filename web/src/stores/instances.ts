@@ -43,5 +43,12 @@ export const useInstancesStore = defineStore('instances', () => {
     return inst
   }
 
-  return { list, loading, fetchAll, create, update, remove, check }
+  /** 批量并发探测后整表刷新（概览页一键刷新用） */
+  async function checkAll() {
+    const summary = await servicesApi.checkAll()
+    await fetchAll()
+    return summary
+  }
+
+  return { list, loading, fetchAll, create, update, remove, check, checkAll }
 })

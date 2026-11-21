@@ -25,6 +25,9 @@ export default {
   nav: { overview: 'Overview', services: 'Services', logout: 'Sign out', loggedOut: 'Signed out' },
   dash: {
     title: 'Overview',
+    checkAll: 'Probe all',
+    checkingAll: 'Probing…',
+    checkAllDone: 'Done: {ok} healthy / {fail} unhealthy',
     total: 'Services',
     healthy: 'Healthy',
     abnormal: 'Unhealthy',

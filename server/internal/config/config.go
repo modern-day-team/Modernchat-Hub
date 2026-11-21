@@ -15,6 +15,7 @@ type Config struct {
 	JWTSecret    string // JWT 签名密钥
 	CookieSecure bool   // mc_auth cookie 是否带 Secure（生产必须 true）
 	CredSecret   string // 服务凭据加密密钥；可选，缺省由 JWT_SECRET 派生（mc-hub-cred-v1: 前缀）
+	GinMode      string // gin 运行模式：release（默认，生产口径）| debug | test
 }
 
 // Load 读取配置；.env 不存在时静默跳过（生产用环境变量注入）。
@@ -26,6 +27,7 @@ func Load() (Config, error) {
 		JWTSecret:    os.Getenv("JWT_SECRET"),
 		CookieSecure: getEnv("COOKIE_SECURE", "false") == "true",
 		CredSecret:   os.Getenv("CRED_SECRET"),
+		GinMode:      getEnv("GIN_MODE", "release"),
 	}
 	// 不提供不安全的默认值：宁可起不来，也不能用空/弱密钥签 token。
 	// ≥32 字节与主仓库生产要求一致（运维手册 §JWT_SECRET）

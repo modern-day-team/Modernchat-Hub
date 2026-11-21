@@ -1,5 +1,5 @@
 import { http } from './client'
-import type { ServiceInstance, UpdateCheck, UpdateStatus, User } from '@/types'
+import type { ProbeAllResultSummary, ServiceInstance, UpdateCheck, UpdateStatus, User } from '@/types'
 
 /** 服务实例表单载荷（camelCase，与后端 handler 契约一致；token 空值=保持原凭据） */
 export interface ServiceUpsert {
@@ -33,6 +33,8 @@ export const servicesApi = {
   update: (id: number, body: ServiceUpsert) => http.put<ServiceInstance>(`/services/${id}`, body),
   remove: (id: number) => http.delete<void>(`/services/${id}`),
   check: (id: number) => http.post<ServiceInstance>(`/services/${id}/actions/check`),
+  /** 批量并发探测（集合级操作；概览页一键刷新） */
+  checkAll: () => http.post<ProbeAllResultSummary>('/services/actions/check-all'),
   /** 更新编排（经 kind 对应 adapter 代理目标服务） */
   updateCheck: (id: number) => http.get<UpdateCheck>(`/services/${id}/update/check`),
   updateStatus: (id: number) => http.get<UpdateStatus>(`/services/${id}/update/status`),

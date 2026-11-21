@@ -25,6 +25,9 @@ export default {
   nav: { overview: '概览', services: '服务管理', logout: '退出登录', loggedOut: '已退出登录' },
   dash: {
     title: '概览',
+    checkAll: '全部探测',
+    checkingAll: '探测中…',
+    checkAllDone: '探测完成：{ok} 健康 / {fail} 异常',
     total: '服务总数',
     healthy: '健康',
     abnormal: '异常',

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -81,7 +82,24 @@ func validate(kind, name, baseURL, authType, healthPath string) (string, string,
 	if !strings.HasPrefix(healthPath, "/") {
 		healthPath = "/" + healthPath
 	}
+	// 长度上限与列宽（varchar 按「字符」计）对齐，超长先 400 而不是落库时 500：
+	// BaseURL 255 / HealthPath 100 / Note 255（note 由调用方归一后校验）
+	if utf8.RuneCountInString(baseURL) > 255 {
+		return "", "", "", "", "", apperr.ErrBadBaseURL
+	}
+	if utf8.RuneCountInString(healthPath) > 100 {
+		return "", "", "", "", "", apperr.ErrInvalidInput
+	}
 	return kind, name, baseURL, authType, healthPath, nil
+}
+
+// validateNote 备注长度校验（列宽 varchar(255)）。
+func validateNote(note string) (string, error) {
+	note = strings.TrimSpace(note)
+	if utf8.RuneCountInString(note) > 255 {
+		return "", apperr.ErrInvalidInput
+	}
+	return note, nil
 }
 
 // Create 注册服务实例：唯一性、URL/鉴权校验，bearer 凭据加密落库。
@@ -104,6 +122,10 @@ func (s *InstanceService) Create(kind, name, baseURL, authType, token, healthPat
 			return nil, err
 		}
 	}
+	note, err = validateNote(note)
+	if err != nil {
+		return nil, err
+	}
 	inst := &model.ServiceInstance{
 		Kind:            kind,
 		Name:            name,
@@ -112,11 +134,14 @@ func (s *InstanceService) Create(kind, name, baseURL, authType, token, healthPat
 		TokenCiphertext: cipher,
 		HealthPath:      healthPath,
 		Enabled:         enabled,
-		Note:            strings.TrimSpace(note),
+		Note:            note,
 		LastStatus:      "unknown",
 	}
 	if err := s.repo.Create(inst); err != nil {
-		// 名称唯一索引兜底并发场景
+		// 名称唯一索引兜底并发场景（TranslateError 已把方言错误转 ErrDuplicatedKey）
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return nil, apperr.ErrNameTaken
+		}
 		return nil, err
 	}
 	inst.FillHasToken()
@@ -144,7 +169,11 @@ func (s *InstanceService) Update(id uint, kind, name, baseURL, authType, token, 
 	inst.AuthType = authType
 	inst.HealthPath = healthPath
 	inst.Enabled = enabled
-	inst.Note = strings.TrimSpace(note)
+	note, err = validateNote(note)
+	if err != nil {
+		return nil, err
+	}
+	inst.Note = note
 	if token != "" {
 		cipher, err := s.box.Seal(token)
 		if err != nil {
@@ -255,6 +284,45 @@ func (s *InstanceService) fetchVersion(base, authType, cipher string) *string {
 		return nil
 	}
 	return &vi.Version
+}
+
+// ProbeAllResult 单实例批量探测结果（json camelCase，handler 直接透传）。
+type ProbeAllResult struct {
+	ID          uint    `json:"id"`
+	Name        string  `json:"name"`
+	LastStatus  string  `json:"lastStatus"`
+	LastVersion *string `json:"lastVersion,omitempty"`
+}
+
+// ProbeConcurrency 批量探测的并发上限（有界：避免实例多时打爆目标服务与本机出口）。
+const ProbeConcurrency = 8
+
+// ProbeAll 并发探测全部实例（有界并发），结果逐个写回；
+// 单个实例的探测失败只落 fail，不影响其他实例，也不向上抛错。
+func (s *InstanceService) ProbeAll() ([]ProbeAllResult, error) {
+	list, err := s.repo.List()
+	if err != nil {
+		return nil, err
+	}
+	results := make([]ProbeAllResult, len(list))
+	sem := make(chan struct{}, ProbeConcurrency)
+	var wg sync.WaitGroup
+	for i := range list {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			inst := &list[i]
+			status, version := s.probeOne(inst)
+			if err := s.repo.SaveProbeResult(inst.ID, status, version, time.Now()); err != nil {
+				slog.Warn("批量探测写回失败", "instance", inst.Name, "err", err)
+			}
+			results[i] = ProbeAllResult{ID: inst.ID, Name: inst.Name, LastStatus: status, LastVersion: version}
+		}(i)
+	}
+	wg.Wait()
+	return results, nil
 }
 
 func (s *InstanceService) doGet(rawURL, authType, cipher string) (*http.Response, error) {

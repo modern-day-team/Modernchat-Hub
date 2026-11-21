@@ -273,6 +273,51 @@ func TestProbeAgainstFakeServer(t *testing.T) {
 	}
 }
 
+func TestProbeAllBoundedConcurrent(t *testing.T) {
+	// 一个 ok 一个 fail：批量探测应全部写回且逐实例状态正确
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/version" {
+			_, _ = w.Write([]byte(`{"version":"1.0.0"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+	tsBad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer tsBad.Close()
+
+	svc, repo := newTestService()
+	if _, err := svc.Create("", "ok1", ts.URL, "none", "", "/api/health", true, ""); err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+	if _, err := svc.Create("", "bad1", tsBad.URL, "none", "", "/api/health", true, ""); err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+
+	results, err := svc.ProbeAll()
+	if err != nil {
+		t.Fatalf("ProbeAll() 出错: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("应有两条结果: %d", len(results))
+	}
+	byName := map[string]ProbeAllResult{}
+	for _, r := range results {
+		byName[r.Name] = r
+	}
+	if r, ok := byName["ok1"]; !ok || r.LastStatus != "ok" || r.LastVersion == nil || *r.LastVersion != "1.0.0" {
+		t.Fatalf("ok1 结果不符: %+v", r)
+	}
+	if r, ok := byName["bad1"]; !ok || r.LastStatus != "fail" {
+		t.Fatalf("bad1 结果不符: %+v", r)
+	}
+	if len(repo.probes) != 2 {
+		t.Fatalf("两次探测都应写回: %v", repo.probes)
+	}
+}
+
 func TestProbeFailuresAreData(t *testing.T) {
 	// 500 → fail（版本端点缺失也应 ok，版本可选）
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

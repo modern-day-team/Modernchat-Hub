@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0（2026-11-21）
+
+- perf(server)：GORM 连接池对齐主仓库（MaxOpen 200 / MaxIdle 50 / ConnMaxLifetime 1h，兜底突发并避免坏连接）；`TranslateError` 把唯一键冲突转为 `gorm.ErrDuplicatedKey`（注册/实例重名并发兜底映射 409）；gin 模式由 `GIN_MODE` 控制且**默认 release**（去 debug 告警与路由打印）；HTTP server 补 `IdleTimeout 90s` + `ReadHeaderTimeout 10s`（家族口径：防 Slowloris、回收 keep-alive，不设整体读写超时以免误杀长连接）
+- perf(server)：REST 响应 gzip（`gin-contrib/gzip`，DefaultCompression、`MinLength=1024`、预留 `/ws` 排除口径——未来 WS 握手依赖 Hijack 不能被 gzip 包装）
+- feat(server)：批量并发探测 `POST /api/v1/services/actions/check-all`——有界并发（上限 8，手写信号量不引新依赖），单实例探测失败只落 fail 不影响其他；概览页一键刷新全部实例状态
+- perf(web)：构建产物预压缩 `.gz`/`.br`（移植家族 `scripts/precompress.mjs`，Node 内置 zlib 零依赖；配合 nginx `gzip_static/brotli_static` 零运行时 CPU）——实测 brotli 后约为原始体积 29%
+- fix(server)：字段长度校验补齐（BaseURL≤255 / HealthPath≤100 / Note≤255 字符，与列宽对齐）——此前超长 note 落库时报 1406 → 500，现在统一 400
+- feat(web)：概览页「全部探测」按钮（完成提示「{ok} 健康 / {fail} 异常」）
+- 端到端验证：批量探测 4/4 ok、gzip 2157B→287B（-87%）、release 模式无 debug 日志、超长字段 400
+- 版本同步：`web/package.json` 0.3.0
+
 ## 0.2.0（2026-11-21）
 
 - feat(adapter)：更新 adapter 落地——`server/internal/adapter/` 定义 `Updater` 窄接口（Check/Status/Start）与 `Registry`（组合根唯一装配点），内置 `modernchatnew.go` 对接主仓库 `/api/admin/update/{status,check,start}`（15s 超时）；目标响应经 `decodeResponse` 统一归一：401/403→凭据无效、404→接口不存在、409→任务进行中、400→部署不支持（目标原因透传）、网络失败→不可达

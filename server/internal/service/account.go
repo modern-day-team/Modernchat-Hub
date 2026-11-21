@@ -74,7 +74,10 @@ func (s *AccountService) Register(username, password, nickname string, email *st
 		u.Role = "admin" // 首个注册者即为管理员
 	}
 	if err := s.users.Create(&u); err != nil {
-		// 用户名/邮箱唯一索引兜底并发场景
+		// 用户名/邮箱唯一索引兜底并发场景（TranslateError 已把方言错误转 ErrDuplicatedKey）
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			return nil, apperr.ErrUsernameTaken
+		}
 		return nil, err
 	}
 	return &u, nil

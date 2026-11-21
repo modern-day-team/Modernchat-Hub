@@ -47,3 +47,19 @@ export interface UpdateStatus {
   currentVersion?: string
   mode?: string
 }
+
+/** 批量探测的单实例结果 */
+export interface ProbeAllResult {
+  id: number
+  name: string
+  lastStatus: 'ok' | 'fail'
+  lastVersion?: string
+}
+
+/** 批量探测汇总（后端有界并发，单实例失败不影响其他） */
+export interface ProbeAllResultSummary {
+  total: number
+  ok: number
+  fail: number
+  results: ProbeAllResult[]
+}

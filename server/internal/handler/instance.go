@@ -9,6 +9,7 @@ import (
 
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/adapter"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/model"
+	"github.com/modern-day-team/Modernchat-Hub/server/internal/service"
 )
 
 // InstanceManage 消费方定义的窄接口（由 service.InstanceService 实现）。
@@ -19,6 +20,7 @@ type InstanceManage interface {
 	Update(id uint, kind, name, baseURL, authType, token, healthPath string, enabled bool, note string) (*model.ServiceInstance, error)
 	Delete(id uint) error
 	Probe(id uint) (*model.ServiceInstance, error)
+	ProbeAll() ([]service.ProbeAllResult, error)
 }
 
 // InstanceUpdater 消费方定义的窄接口：更新编排代理（由 service.InstanceService 实现）。
@@ -136,6 +138,32 @@ func (h *InstanceHandler) Check(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, inst)
+}
+
+// probeAllResp 批量探测汇总。
+type probeAllResp struct {
+	Total   int                      `json:"total"`
+	OK      int                      `json:"ok"`
+	Fail    int                      `json:"fail"`
+	Results []service.ProbeAllResult `json:"results"`
+}
+
+// CheckAll 并发探测全部实例（有界并发；概览页一键刷新用）。
+func (h *InstanceHandler) CheckAll(c *gin.Context) {
+	results, err := h.instances.ProbeAll()
+	if err != nil {
+		mapErr(c, err)
+		return
+	}
+	resp := probeAllResp{Total: len(results), Results: results}
+	for _, r := range results {
+		if r.LastStatus == "ok" {
+			resp.OK++
+		} else {
+			resp.Fail++
+		}
+	}
+	c.JSON(http.StatusOK, resp)
 }
 
 // ── 更新编排代理（/services/:id/update/*，经 kind 对应 adapter）──

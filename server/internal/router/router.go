@@ -5,6 +5,7 @@ package router
 import (
 	"net/http"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/adapter"
@@ -19,7 +20,19 @@ import (
 
 // Setup 装配全部路由。
 func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceStore, box *crypto.Box) *gin.Engine {
-	r := gin.Default()
+	// gin.New 而非 Default：模式由 config 统一控制（release 下无 debug 告警），
+	// 中间件显式装配（Logger + Recovery）
+	r := gin.New()
+	r.Use(gin.Logger(), gin.Recovery())
+
+	// REST 响应压缩（与主仓库同口径）：
+	// 未来 /ws 必须排除——WebSocket 升级依赖 Hijack，被 gzip 包装的 ResponseWriter 会破坏握手；
+	// MinLength=1024：小于该长度的响应压缩后反而更大（gzip 头 + 熵不足）。
+	r.Use(gzip.Gzip(
+		gzip.DefaultCompression,
+		gzip.WithExcludedPaths([]string{"/ws"}),
+		gzip.WithMinLength(1024),
+	))
 
 	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -51,12 +64,13 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 
 	// 服务实例管理：面板是管理后台，实例 CRUD 只对管理员开放
 	admin := authed.Group("", middleware.Admin())
-	admin.GET("/services", instH.List)                     // 列表
-	admin.POST("/services", instH.Create)                  // 注册实例
-	admin.GET("/services/:id", instH.Get)                  // 详情
-	admin.PUT("/services/:id", instH.Update)               // 编辑（token 空值=保持不变）
-	admin.DELETE("/services/:id", instH.Delete)            // 删除
-	admin.POST("/services/:id/actions/check", instH.Check) // 立即探测
+	admin.GET("/services", instH.List)                        // 列表
+	admin.POST("/services", instH.Create)                     // 注册实例
+	admin.GET("/services/:id", instH.Get)                     // 详情
+	admin.PUT("/services/:id", instH.Update)                  // 编辑（token 空值=保持不变）
+	admin.DELETE("/services/:id", instH.Delete)               // 删除
+	admin.POST("/services/:id/actions/check", instH.Check)    // 立即探测
+	admin.POST("/services/actions/check-all", instH.CheckAll) // 批量并发探测（集合级操作）
 
 	// 更新编排子资源（经 kind 对应 adapter 代理目标服务；未注册 kind → 400）
 	admin.GET("/services/:id/update/check", instH.UpdateCheck)   // 检查新版本

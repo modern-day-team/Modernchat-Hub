@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { MessagePlugin } from 'tdesign-vue-next'
 
+import { ApiError } from '@/api/client'
+import UiButton from '@/components/ui/UiButton.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import { useInstancesStore } from '@/stores/instances'
 import type { ServiceInstance } from '@/types'
@@ -9,6 +12,7 @@ import type { ServiceInstance } from '@/types'
 const { t } = useI18n()
 const instances = useInstancesStore()
 const loaded = ref(false)
+const checkingAll = ref(false)
 
 onMounted(async () => {
   await instances.fetchAll()
@@ -21,6 +25,20 @@ const counts = computed(() => {
   const fail = instances.list.filter((i) => i.lastStatus === 'fail').length
   return { total, ok, fail, unknown: total - ok - fail }
 })
+
+/** 一键批量探测（后端有界并发），完成即刷新统计 */
+async function checkAll() {
+  if (checkingAll.value) return
+  checkingAll.value = true
+  try {
+    const summary = await instances.checkAll()
+    MessagePlugin.success(t('dash.checkAllDone', { ok: summary.ok, fail: summary.fail }))
+  } catch (e) {
+    MessagePlugin.error(e instanceof ApiError ? e.message : t('svc.failed'))
+  } finally {
+    checkingAll.value = false
+  }
+}
 
 function statusTheme(s: ServiceInstance['lastStatus']): 'success' | 'danger' | 'default' {
   return s === 'ok' ? 'success' : s === 'fail' ? 'danger' : 'default'
@@ -37,7 +55,12 @@ function fmtTime(iso?: string) {
 
 <template>
   <div>
-    <h1 class="dash__title">{{ t('dash.title') }}</h1>
+    <div class="dash__head">
+      <h1 class="dash__title">{{ t('dash.title') }}</h1>
+      <UiButton variant="outline" size="small" :loading="checkingAll" :disabled="loaded && instances.list.length === 0" @click="checkAll">
+        {{ checkingAll ? t('dash.checkingAll') : t('dash.checkAll') }}
+      </UiButton>
+    </div>
 
     <!-- 状态统计卡 -->
     <div class="dash__cards">
@@ -88,8 +111,15 @@ function fmtTime(iso?: string) {
 </template>
 
 <style scoped>
+.dash__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
 .dash__title {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: var(--mc-fs-title);
   font-weight: 600;
 }
