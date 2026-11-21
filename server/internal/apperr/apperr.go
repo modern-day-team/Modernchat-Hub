@@ -13,6 +13,7 @@ var (
 	ErrInvalidCredentials = errors.New("用户名或密码错误")
 	ErrInvalidToken       = errors.New("未登录或登录已过期")
 	ErrBanned             = errors.New("账号封禁中")
+	ErrAccountLocked      = errors.New("账号已被临时锁定") // 登录失败锁定；剩余分钟经 %w 包装
 
 	// 服务实例域
 	ErrNameTaken        = errors.New("服务名称已存在")

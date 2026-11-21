@@ -3,6 +3,7 @@
 package router
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-contrib/gzip"
@@ -19,11 +20,18 @@ import (
 )
 
 // Setup 装配全部路由。
-func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceStore, box *crypto.Box) *gin.Engine {
+func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceStore, attempts *store.LoginAttemptStore, box *crypto.Box) *gin.Engine {
 	// gin.New 而非 Default：模式由 config 统一控制（release 下无 debug 告警），
 	// 中间件显式装配（Logger + Recovery）
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
+
+	// 显式限定可信代理（ClientIP 防 X-Forwarded-For 伪造，限流与审计都依赖它）：
+	// 默认仅回环；TRUSTED_PROXIES 显式空串 = 不信任任何代理（nil 语义是不使用转发头）。
+	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		slog.Warn("TRUSTED_PROXIES 配置非法，退化为不信任任何代理", "err", err)
+		_ = r.SetTrustedProxies(nil)
+	}
 
 	// REST 响应压缩（与主仓库同口径）：
 	// 未来 /ws 必须排除——WebSocket 升级依赖 Hijack，被 gzip 包装的 ResponseWriter 会破坏握手；
@@ -42,7 +50,7 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 		c.JSON(http.StatusOK, version.Current())
 	})
 
-	accounts := service.NewAccountService(users, cfg.JWTSecret)
+	accounts := service.NewAccountService(users, attempts, cfg.LoginMaxAttempts, cfg.LoginLockMinutes, cfg.JWTSecret)
 	authH := handler.NewAuthHandler(accounts, cfg.CookieSecure)
 	authMw := middleware.Auth(accounts) // *service.AccountService 满足窄接口 Authenticator
 
@@ -55,10 +63,12 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	instH := handler.NewInstanceHandler(instancesSvc, instancesSvc, instancesSvc)
 
 	v1 := r.Group("/api/v1")
-	// TODO(限流)：注册/登录挂 IP 级限流 + 账号级失败锁定（参照主仓库 middleware/limiter.go）；
-	// 落地时做成独立中间件，经窄接口注入，不侵入 handler/service
-	v1.POST("/users", authH.Register) // 注册
-	v1.POST("/sessions", authH.Login) // 登录（创建会话）
+	// 认证类接口 IP 级限流（项目组口径：每 IP 每路由 10 次/分，内存令牌桶，按路由独立配额）；
+	// 账号级失败锁定在 AccountService.Login 内（login_attempts 表，按 username 计）
+	registerLimiter := middleware.NewIPRateLimiter(10).Middleware()
+	loginLimiter := middleware.NewIPRateLimiter(10).Middleware()
+	v1.POST("/users", registerLimiter, authH.Register) // 注册
+	v1.POST("/sessions", loginLimiter, authH.Login)    // 登录（创建会话）
 
 	authed := v1.Group("", authMw)
 	authed.GET("/users/me", authH.Me)                // 当前用户

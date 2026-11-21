@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0（2026-11-21）
+
+- feat(server)：认证安全加固（router 遗留 TODO 清零）——**IP 级限流**：内存令牌桶中间件（`golang.org/x/time/rate`），注册/登录每 IP 每路由 10 次/分，超限 429「操作过于频繁，请稍后再试」；惰性清理防内存膨胀
+- feat(server)：**登录失败锁定**——`login_attempts` 表按 username 计（用户不存在也计数，堵「用户名不存在」绕过；错误文案恒定不泄露账号存在性）；`ON DUPLICATE KEY UPDATE` 原子自增，达阈值写 `locked_until` 并清零计数（429 带剩余分钟），凭据正确即删除记录，锁定期过后自动失效；锁定检查先于密码校验；计数失败只记日志降级放行（不阻塞主流程）
+- feat(server)：`TRUSTED_PROXIES` 显式配置（默认仅回环；显式空串 = 不信任任何代理）——ClientIP 防 X-Forwarded-For 伪造，限流与审计依赖其正确性
+- config：`LOGIN_MAX_ATTEMPTS`（0=关闭，否则 2–20，默认 5）、`LOGIN_LOCK_MINUTES`（1–1440，默认 15）、`TRUSTED_PROXIES`
+- 端到端验证：3 次错密码即触发锁定（429 带剩余分钟）→ 锁定期内再试仍 429（检查先行于密码校验）→ 1 分钟自动过期后正确密码 200；注册端点连打 11 次 = 400×10 + 429×1，且登录端点配额独立不受影响
+- 版本同步：`web/package.json` 0.5.0
+
 ## 0.4.0（2026-11-21）
 
 - feat(adapter)：统一管理后台落地——`adapter.Adminer` 窄接口（Stats/Users/Ban/Unban/Kick/ResetPassword）与 `Registry` 双能力注册（更新 + 管理）；`modernchatnew.go` 代理主仓库站长 API `/api/admin/{stats,users,users/:id/{ban,unban,kick,reset-password}}`（响应形状逐字段对齐主仓库需求规格 §3.2，指针字段 nil 归一）

@@ -4,6 +4,8 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -16,6 +18,15 @@ type Config struct {
 	CookieSecure bool   // mc_auth cookie 是否带 Secure（生产必须 true）
 	CredSecret   string // 服务凭据加密密钥；可选，缺省由 JWT_SECRET 派生（mc-hub-cred-v1: 前缀）
 	GinMode      string // gin 运行模式：release（默认，生产口径）| debug | test
+
+	// 可信反向代理：ClientIP 的取值来源。默认仅回环；显式设为空串 = 不信任任何代理
+	// （不使用 X-Forwarded-For，ClientIP 只取 RemoteAddr）——防伪造 IP 绕过限流。
+	TrustedProxies []string
+
+	// 登录失败锁定（security.loginMaxAttempts / loginLockMinutes 的项目组口径）：
+	// 按 username 计（用户不存在也计数），0 = 关闭锁定。
+	LoginMaxAttempts int // 0（关闭）或 2–20，默认 5
+	LoginLockMinutes int // 1–1440，默认 15
 }
 
 // Load 读取配置；.env 不存在时静默跳过（生产用环境变量注入）。
@@ -29,6 +40,8 @@ func Load() (Config, error) {
 		CredSecret:   os.Getenv("CRED_SECRET"),
 		GinMode:      getEnv("GIN_MODE", "release"),
 	}
+	cfg.TrustedProxies = parseTrustedProxies()
+	cfg.LoginMaxAttempts, cfg.LoginLockMinutes = parseLoginLock()
 	// 不提供不安全的默认值：宁可起不来，也不能用空/弱密钥签 token。
 	// ≥32 字节与主仓库生产要求一致（运维手册 §JWT_SECRET）
 	if len(cfg.JWTSecret) < 32 {
@@ -42,4 +55,42 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// parseTrustedProxies TRUSTED_PROXIES：逗号分隔网段。
+// 默认仅回环；显式设为空串 = 不信任任何代理（此时不使用 X-Forwarded-For）。
+func parseTrustedProxies() []string {
+	raw := os.Getenv("TRUSTED_PROXIES")
+	if _, ok := os.LookupEnv("TRUSTED_PROXIES"); ok && raw == "" {
+		return nil // 显式空串：不信任任何代理
+	}
+	if raw == "" {
+		raw = "127.0.0.1,::1"
+	}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// parseLoginLock LOGIN_MAX_ATTEMPTS（0=关闭，否则 2–20，默认 5）与 LOGIN_LOCK_MINUTES（1–1440，默认 15）。
+func parseLoginLock() (int, int) {
+	n, _ := strconv.Atoi(os.Getenv("LOGIN_MAX_ATTEMPTS"))
+	maxAttempts := 5
+	if n == 0 {
+		maxAttempts = 0 // 显式 0 = 关闭锁定
+	} else if n >= 2 && n <= 20 {
+		maxAttempts = n
+	}
+	minutes, _ := strconv.Atoi(getEnv("LOGIN_LOCK_MINUTES", "15"))
+	if minutes < 1 || minutes > 1440 {
+		minutes = 15
+	}
+	return maxAttempts, minutes
 }

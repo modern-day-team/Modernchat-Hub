@@ -117,6 +117,9 @@ func mapErr(c *gin.Context, err error) {
 		fail(c, http.StatusBadGateway, err.Error())
 	case errors.Is(err, apperr.ErrInvalidCredentials), errors.Is(err, apperr.ErrInvalidToken):
 		fail(c, http.StatusUnauthorized, err.Error())
+	case errors.Is(err, apperr.ErrAccountLocked):
+		// 登录失败锁定（429 + 剩余分钟），与 IP 限流的 429 文案区分
+		fail(c, http.StatusTooManyRequests, err.Error())
 	case errors.Is(err, apperr.ErrBanned):
 		fail(c, http.StatusForbidden, err.Error())
 	default:

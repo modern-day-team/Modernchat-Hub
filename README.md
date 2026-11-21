@@ -99,3 +99,4 @@ web/
 - 文档、注释、UI 文案、提交描述一律中文；提交信息 Conventional Commits（`feat: xxx` / `fix: xxx`）
 - 仓库强制 LF（`.gitattributes`）
 - **严禁把凭据写入仓库**（项目组历史教训）；`.env` 已 gitignore
+- **认证安全**：注册/登录每 IP 每路由 10 次/分限流（429）；登录失败锁定按 username 计（默认 5 次锁 15 分钟，`LOGIN_MAX_ATTEMPTS=0` 关闭）；`TRUSTED_PROXIES` 显式配置防伪造 IP
