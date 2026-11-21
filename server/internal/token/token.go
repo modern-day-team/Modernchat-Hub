@@ -1,5 +1,5 @@
 // Package token JWT 签发与解析：口径与主仓库 Modernchat-new 完全一致
-// （HS256，claims 仅 uid + tv），家族服务共享 JWT_SECRET 即可互相校验。
+// （HS256，claims 仅 uid + tv），项目组服务共享 JWT_SECRET 即可互相校验。
 // 本包是叶子依赖：不 import 项目内其他包。
 package token
 

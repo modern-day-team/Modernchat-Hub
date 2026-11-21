@@ -1,6 +1,6 @@
 // Package crypto 服务凭据加解密：nacl/secretbox。
 // 密钥用独立前缀 mc-hub-cred-v1: 派生，不与主仓库的 mc-settings-v1 口径混用——
-// 家族服务共享 JWT_SECRET 时，Hub 的凭据语义必须隔离（见 AGENTS.md 密钥警告）。
+// 项目组服务共享 JWT_SECRET 时，Hub 的凭据语义必须隔离（见 AGENTS.md 密钥警告）。
 package crypto
 
 import (

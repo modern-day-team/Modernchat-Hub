@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import UiButton from './UiButton.vue'
 
 /**
- * 模态对话框（UnoCSS 实现的家族风格精简版，替代 TDesign Dialog）。
+ * 模态对话框（UnoCSS 实现的项目组风格精简版，替代 TDesign Dialog）。
  *
  * - `v-model:visible`、`header`、`width`；`footer=false` 为纯展示弹窗
  * - `confirmTheme=danger` 用于删除确认；`confirmLoading` 期间禁止重复提交

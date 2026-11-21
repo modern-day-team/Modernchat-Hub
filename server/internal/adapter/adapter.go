@@ -1,4 +1,4 @@
-// Package adapter 家族特化适配层：把「被管理服务」的差异收敛在 adapter，
+// Package adapter 项目组特化适配层：把「被管理服务」的差异收敛在 adapter，
 // 内核（service）只依赖本包定义的窄接口与归一化结果——
 // 新增一个被管理服务 = 注册配置 +（必要时）一个 adapter，不改内核代码（AGENTS.md 通用型设计原则）。
 package adapter

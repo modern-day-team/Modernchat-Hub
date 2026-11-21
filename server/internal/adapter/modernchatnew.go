@@ -10,7 +10,7 @@ import (
 const KindModernchatNew = "modernchat-new"
 
 // 主仓库在线更新接口的响应形状（internal/service/updater.go 的 StatusView / CheckResult）。
-// 家族 JWT 口径一致：凭 Bearer 管理员 token 调用 /api/admin/update/*。
+// 项目组 JWT 口径一致：凭 Bearer 管理员 token 调用 /api/admin/update/*。
 type targetStatusView struct {
 	Available bool     `json:"available"`
 	Busy      bool     `json:"busy"`

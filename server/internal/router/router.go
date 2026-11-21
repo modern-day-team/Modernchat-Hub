@@ -46,7 +46,7 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	authH := handler.NewAuthHandler(accounts, cfg.CookieSecure)
 	authMw := middleware.Auth(accounts) // *service.AccountService 满足窄接口 Authenticator
 
-	// 更新 adapter 注册表：家族特化能力在此装配；内核不感知具体家族服务
+	// 更新 adapter 注册表：项目组特化能力在此装配；内核不感知具体项目组服务
 	updates := adapter.NewRegistry()
 	updates.Register(adapter.NewModernchatNew())
 	instancesSvc := service.NewInstanceService(instances, box, updates)

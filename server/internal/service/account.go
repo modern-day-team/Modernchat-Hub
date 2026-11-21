@@ -24,7 +24,7 @@ var avatarPalette = []string{"#0052d9", "#2ba471", "#d54941", "#ed7b2f", "#ca8d0
 // AccountService 账号业务。
 type AccountService struct {
 	users  *store.UserStore
-	secret string // JWT 签名密钥（与家族服务共享同一值即 token 互认）
+	secret string // JWT 签名密钥（与项目组服务共享同一值即 token 互认）
 }
 
 // NewAccountService 构造。
@@ -84,7 +84,7 @@ func (s *AccountService) Register(username, password, nickname string, email *st
 }
 
 // Login 登录：校验凭证与封禁，签发 token。
-// 家族规则：登录失败只记用户名与 IP，绝不记密码/令牌；账号不存在与密码错误同一错误。
+// 项目组规则：登录失败只记用户名与 IP，绝不记密码/令牌；账号不存在与密码错误同一错误。
 func (s *AccountService) Login(username, password, ip string) (string, *model.User, error) {
 	u, err := s.users.FindByUsername(username)
 	if err != nil {

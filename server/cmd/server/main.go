@@ -1,4 +1,4 @@
-// Modernchat-Hub：Modernchat 家族统一管理面板入口。
+// Modernchat-Hub：Modernchat 项目组统一管理面板入口。
 package main
 
 import (

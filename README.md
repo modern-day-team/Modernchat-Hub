@@ -1,6 +1,6 @@
 # Unified-Console
 
-Modernchat 家族的通用型统一管理面板（Modernchat-Hub）：把家族各服务的站长后台收敛到一处——**统一管理后台 + 统一更新管理**。核心域模型是「服务实例」：名称、base URL、鉴权方式、健康检查端点全部数据化配置，内核不硬编码任何特定服务的逻辑；新增一个被管理服务 = 注册配置 +（必要时）一个 adapter，不改内核代码。
+Modernchat 项目组的通用型统一管理面板（Modernchat-Hub）：把项目组各服务的站长后台收敛到一处——**统一管理后台 + 统一更新管理**。核心域模型是「服务实例」：名称、base URL、鉴权方式、健康检查端点全部数据化配置，内核不硬编码任何特定服务的逻辑；新增一个被管理服务 = 注册配置 +（必要时）一个 adapter，不改内核代码。
 
 ## 技术栈
 
@@ -11,9 +11,9 @@ Modernchat 家族的通用型统一管理面板（Modernchat-Hub）：把家族�
 
 ## 核心能力
 
-- **统一管理后台**：管理员在 Hub 一处完成家族各站点的用户管理、站点设置、公告、插件上下架、审计等，经各服务的管理 API 远程操作；各服务管理员凭据由 Hub 加密落库托管
-- **统一更新管理（0.2.0 已落地）**：对 `kind=modernchat-new` 的实例，经 adapter 代理主仓库在线更新——检查新版本、轮询更新任务状态、远程触发更新；目标 `WEB_UPDATE=false` 或部署方式不支持时优雅降级（原因透传）；新增家族服务类型 = 新 adapter + 组合根一行注册
-- **通用内核**：服务注册/连接管理、健康与状态聚合、凭据托管、管理操作代理、版本与更新编排；家族特化逻辑放独立 adapter 包（`server/internal/adapter/`），经窄接口注入内核
+- **统一管理后台**：管理员在 Hub 一处完成项目组各站点的用户管理、站点设置、公告、插件上下架、审计等，经各服务的管理 API 远程操作；各服务管理员凭据由 Hub 加密落库托管
+- **统一更新管理（0.2.0 已落地）**：对 `kind=modernchat-new` 的实例，经 adapter 代理主仓库在线更新——检查新版本、轮询更新任务状态、远程触发更新；目标 `WEB_UPDATE=false` 或部署方式不支持时优雅降级（原因透传）；新增项目组服务类型 = 新 adapter + 组合根一行注册
+- **通用内核**：服务注册/连接管理、健康与状态聚合、凭据托管、管理操作代理、版本与更新编排；项目组特化逻辑放独立 adapter 包（`server/internal/adapter/`），经窄接口注入内核
 
 ## 快速开始
 
@@ -47,7 +47,7 @@ server/
   internal/
     config/            # 配置加载（.env 可选，JWT_SECRET 必填 ≥32 字节）
     version/           # 构建版本信息（/api/version，ldflags 注入）
-    token/             # JWT（叶子包，家族口径 uid+tv、TTL 7 天）
+    token/             # JWT（叶子包，项目组口径 uid+tv、TTL 7 天）
     apperr/            # 哨兵错误（叶子包）
     crypto/            # 服务凭据加解密（nacl/secretbox，独立派生前缀 mc-hub-cred-v1:）
     model/             # GORM 模型（User / ServiceInstance）
@@ -55,7 +55,7 @@ server/
     service/           # 业务规则唯一归属（账号 / 服务实例与探测）
     handler/           # 传输层零业务（绑定/组装/状态码映射）
     middleware/        # 认证 / 管理员角色校验
-    adapter/           # 家族特化适配（Updater 窄接口 + Registry；modernchat-new 已接入）
+    adapter/           # 项目组特化适配（Updater 窄接口 + Registry；modernchat-new 已接入）
     router/            # 唯一组合根
 web/
   src/
@@ -92,4 +92,4 @@ web/
 - 开发约定见仓库内 `AGENTS.md`（本地文件，不入库）
 - 文档、注释、UI 文案、提交描述一律中文；提交信息 Conventional Commits（`feat: xxx` / `fix: xxx`）
 - 仓库强制 LF（`.gitattributes`）
-- **严禁把凭据写入仓库**（家族历史教训）；`.env` 已 gitignore
+- **严禁把凭据写入仓库**（项目组历史教训）；`.env` 已 gitignore

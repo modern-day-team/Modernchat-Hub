@@ -54,7 +54,7 @@ func NewInstanceService(repo instanceRepo, box *crypto.Box, updates *adapter.Reg
 }
 
 // validate 校验并归一（名称/kind 去空格、BaseURL 可解析、健康路径带前导斜杠）。
-// kind 是纯数据：空值归一为 generic，不枚举家族服务类型（通用型设计原则）。
+// kind 是纯数据：空值归一为 generic，不枚举项目组服务类型（通用型设计原则）。
 func validate(kind, name, baseURL, authType, healthPath string) (string, string, string, string, string, error) {
 	kind = strings.TrimSpace(kind)
 	if kind == "" {
@@ -343,7 +343,7 @@ func (s *InstanceService) doGet(rawURL, authType, cipher string) (*http.Response
 // ── 更新编排（经 kind 对应 adapter 代理目标服务）──
 
 // resolveUpdater 按实例的服务类型解析更新 adapter；
-// 未注册的 kind（含 generic）一律不支持——内核不枚举家族服务类型。
+// 未注册的 kind（含 generic）一律不支持——内核不枚举项目组服务类型。
 func (s *InstanceService) resolveUpdater(inst *model.ServiceInstance) (adapter.Updater, error) {
 	if s.updates == nil {
 		return nil, apperr.ErrKindUnknown

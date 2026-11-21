@@ -1,4 +1,4 @@
-/** 中文文案；新增键 zh-CN 与 en-US 两处同步加（家族约定） */
+/** 中文文案；新增键 zh-CN 与 en-US 两处同步加（项目组约定） */
 export default {
   app: { name: 'ModernChat Hub', subtitle: '统一管理面板' },
   lang: { toggle: 'English' },

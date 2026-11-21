@@ -36,7 +36,7 @@ const rules: FormProps['rules'] = {
   email: [{ validator: (v: string) => !v || /.+@.+\..+/.test(v), message: t('auth.emailInvalid') }],
 }
 
-/** TForm 的 submit：Enter 与按钮统一走校验→提交（沿用家族 AuthView 模式） */
+/** TForm 的 submit：Enter 与按钮统一走校验→提交（沿用项目组 AuthView 模式） */
 function onSubmit({ validateResult }: { validateResult: boolean | Record<string, unknown> }) {
   if (validateResult !== true || loading.value) return
   loading.value = true
