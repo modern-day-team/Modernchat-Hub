@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/modern-day-team/Modernchat-Hub/server/internal/adapter"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/apperr"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/crypto"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/model"
@@ -38,30 +40,39 @@ type instanceRepo interface {
 	SaveProbeResult(id uint, status string, version *string, checkedAt time.Time) error
 }
 
-// InstanceService 服务实例业务：注册/编辑/探测的规则唯一归属地。
+// InstanceService 服务实例业务：注册/编辑/探测/更新编排的规则唯一归属地。
 type InstanceService struct {
-	repo instanceRepo
-	box  *crypto.Box
+	repo    instanceRepo
+	box     *crypto.Box
+	updates *adapter.Registry // 更新 adapter 注册表（组合根装配；可 nil，此时更新操作一律不支持）
 }
 
 // NewInstanceService 构造。
-func NewInstanceService(repo instanceRepo, box *crypto.Box) *InstanceService {
-	return &InstanceService{repo: repo, box: box}
+func NewInstanceService(repo instanceRepo, box *crypto.Box, updates *adapter.Registry) *InstanceService {
+	return &InstanceService{repo: repo, box: box, updates: updates}
 }
 
-// validate 校验并归一（名称去空格、BaseURL 可解析、健康路径带前导斜杠）。
-func validate(name, baseURL, authType, healthPath string) (string, string, string, string, error) {
+// validate 校验并归一（名称/kind 去空格、BaseURL 可解析、健康路径带前导斜杠）。
+// kind 是纯数据：空值归一为 generic，不枚举家族服务类型（通用型设计原则）。
+func validate(kind, name, baseURL, authType, healthPath string) (string, string, string, string, string, error) {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		kind = model.KindGeneric
+	}
+	if utf8.RuneCountInString(kind) > 30 {
+		return "", "", "", "", "", apperr.ErrInvalidInput
+	}
 	name = strings.TrimSpace(name)
 	if name == "" || utf8.RuneCountInString(name) > 30 {
-		return "", "", "", "", apperr.ErrInvalidInput
+		return "", "", "", "", "", apperr.ErrInvalidInput
 	}
 	baseURL = strings.TrimSpace(baseURL)
 	u, err := url.Parse(baseURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return "", "", "", "", apperr.ErrBadBaseURL
+		return "", "", "", "", "", apperr.ErrBadBaseURL
 	}
 	if authType != AuthNone && authType != AuthBearer {
-		return "", "", "", "", apperr.ErrAuthType
+		return "", "", "", "", "", apperr.ErrAuthType
 	}
 	healthPath = strings.TrimSpace(healthPath)
 	if healthPath == "" {
@@ -70,12 +81,12 @@ func validate(name, baseURL, authType, healthPath string) (string, string, strin
 	if !strings.HasPrefix(healthPath, "/") {
 		healthPath = "/" + healthPath
 	}
-	return name, baseURL, authType, healthPath, nil
+	return kind, name, baseURL, authType, healthPath, nil
 }
 
 // Create 注册服务实例：唯一性、URL/鉴权校验，bearer 凭据加密落库。
-func (s *InstanceService) Create(name, baseURL, authType, token, healthPath string, enabled bool, note string) (*model.ServiceInstance, error) {
-	name, baseURL, authType, healthPath, err := validate(name, baseURL, authType, healthPath)
+func (s *InstanceService) Create(kind, name, baseURL, authType, token, healthPath string, enabled bool, note string) (*model.ServiceInstance, error) {
+	kind, name, baseURL, authType, healthPath, err := validate(kind, name, baseURL, authType, healthPath)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +105,7 @@ func (s *InstanceService) Create(name, baseURL, authType, token, healthPath stri
 		}
 	}
 	inst := &model.ServiceInstance{
+		Kind:            kind,
 		Name:            name,
 		BaseURL:         baseURL,
 		AuthType:        authType,
@@ -112,15 +124,12 @@ func (s *InstanceService) Create(name, baseURL, authType, token, healthPath stri
 }
 
 // Update 编辑实例：token 传空表示保持原凭据不变。
-func (s *InstanceService) Update(id uint, name, baseURL, authType, token, healthPath string, enabled bool, note string) (*model.ServiceInstance, error) {
-	inst, err := s.repo.FindByID(id)
+func (s *InstanceService) Update(id uint, kind, name, baseURL, authType, token, healthPath string, enabled bool, note string) (*model.ServiceInstance, error) {
+	inst, err := s.getInstance(id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, apperr.ErrInstanceNotFound
-		}
 		return nil, err
 	}
-	name, baseURL, authType, healthPath, err = validate(name, baseURL, authType, healthPath)
+	kind, name, baseURL, authType, healthPath, err = validate(kind, name, baseURL, authType, healthPath)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +138,7 @@ func (s *InstanceService) Update(id uint, name, baseURL, authType, token, health
 	} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
+	inst.Kind = kind
 	inst.Name = name
 	inst.BaseURL = baseURL
 	inst.AuthType = authType
@@ -161,6 +171,16 @@ func (s *InstanceService) List() ([]model.ServiceInstance, error) {
 
 // Get 单个实例。
 func (s *InstanceService) Get(id uint) (*model.ServiceInstance, error) {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return nil, err
+	}
+	inst.FillHasToken()
+	return inst, nil
+}
+
+// getInstance 按主键取实例；不存在映射为 ErrInstanceNotFound（各方法共用）。
+func (s *InstanceService) getInstance(id uint) (*model.ServiceInstance, error) {
 	inst, err := s.repo.FindByID(id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -168,7 +188,6 @@ func (s *InstanceService) Get(id uint) (*model.ServiceInstance, error) {
 		}
 		return nil, err
 	}
-	inst.FillHasToken()
 	return inst, nil
 }
 
@@ -181,11 +200,8 @@ func (s *InstanceService) Delete(id uint) error {
 // 版本端点（BaseURL + /api/version）可选，取到则记录 LastVersion。
 // 探测结果是数据不是异常：网络失败只写回 fail，不向上抛错。
 func (s *InstanceService) Probe(id uint) (*model.ServiceInstance, error) {
-	inst, err := s.repo.FindByID(id)
+	inst, err := s.getInstance(id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, apperr.ErrInstanceNotFound
-		}
 		return nil, err
 	}
 	status, version := s.probeOne(inst)
@@ -254,4 +270,87 @@ func (s *InstanceService) doGet(rawURL, authType, cipher string) (*http.Response
 		req.Header.Set("Authorization", "Bearer "+plain)
 	}
 	return probeHTTP.Do(req)
+}
+
+// ── 更新编排（经 kind 对应 adapter 代理目标服务）──
+
+// resolveUpdater 按实例的服务类型解析更新 adapter；
+// 未注册的 kind（含 generic）一律不支持——内核不枚举家族服务类型。
+func (s *InstanceService) resolveUpdater(inst *model.ServiceInstance) (adapter.Updater, error) {
+	if s.updates == nil {
+		return nil, apperr.ErrKindUnknown
+	}
+	u, ok := s.updates.Updater(inst.Kind)
+	if !ok {
+		return nil, apperr.ErrKindUnknown
+	}
+	return u, nil
+}
+
+// credential 解密目标服务访问凭据；none 鉴权返回空串（能否访问由目标侧裁决）。
+func (s *InstanceService) credential(inst *model.ServiceInstance) (string, error) {
+	if inst.AuthType != AuthBearer {
+		return "", nil
+	}
+	plain, err := s.box.Open(inst.TokenCiphertext)
+	if err != nil {
+		return "", fmt.Errorf("凭据解密失败: %w", err)
+	}
+	return plain, nil
+}
+
+// UpdateCheck 检查目标服务的新版本（目标本地版本 vs 其更新源最新版本）。
+func (s *InstanceService) UpdateCheck(id uint) (*adapter.UpdateCheck, error) {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return nil, err
+	}
+	u, err := s.resolveUpdater(inst)
+	if err != nil {
+		return nil, err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return nil, err
+	}
+	return u.Check(inst.BaseURL, token)
+}
+
+// UpdateStatus 查询目标更新任务状态（Web 端轮询）。
+func (s *InstanceService) UpdateStatus(id uint) (*adapter.UpdateStatus, error) {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return nil, err
+	}
+	u, err := s.resolveUpdater(inst)
+	if err != nil {
+		return nil, err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return nil, err
+	}
+	return u.Status(inst.BaseURL, token)
+}
+
+// UpdateStart 触发目标在线更新（异步执行；进度由 UpdateStatus 轮询）。
+func (s *InstanceService) UpdateStart(id uint) error {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return err
+	}
+	u, err := s.resolveUpdater(inst)
+	if err != nil {
+		return err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return err
+	}
+	if err := u.Start(inst.BaseURL, token); err != nil {
+		return err
+	}
+	// 日志只记实例名与类型，不记凭据
+	slog.Info("已触发远程更新", "instance", inst.Name, "kind", inst.Kind)
+	return nil
 }

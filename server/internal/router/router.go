@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/modern-day-team/Modernchat-Hub/server/internal/adapter"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/config"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/crypto"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/handler"
@@ -32,8 +33,11 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	authH := handler.NewAuthHandler(accounts, cfg.CookieSecure)
 	authMw := middleware.Auth(accounts) // *service.AccountService 满足窄接口 Authenticator
 
-	instancesSvc := service.NewInstanceService(instances, box)
-	instH := handler.NewInstanceHandler(instancesSvc)
+	// 更新 adapter 注册表：家族特化能力在此装配；内核不感知具体家族服务
+	updates := adapter.NewRegistry()
+	updates.Register(adapter.NewModernchatNew())
+	instancesSvc := service.NewInstanceService(instances, box, updates)
+	instH := handler.NewInstanceHandler(instancesSvc, instancesSvc)
 
 	v1 := r.Group("/api/v1")
 	// TODO(限流)：注册/登录挂 IP 级限流 + 账号级失败锁定（参照主仓库 middleware/limiter.go）；
@@ -53,6 +57,11 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	admin.PUT("/services/:id", instH.Update)               // 编辑（token 空值=保持不变）
 	admin.DELETE("/services/:id", instH.Delete)            // 删除
 	admin.POST("/services/:id/actions/check", instH.Check) // 立即探测
+
+	// 更新编排子资源（经 kind 对应 adapter 代理目标服务；未注册 kind → 400）
+	admin.GET("/services/:id/update/check", instH.UpdateCheck)   // 检查新版本
+	admin.GET("/services/:id/update/status", instH.UpdateStatus) // 更新任务状态（轮询）
+	admin.POST("/services/:id/update/start", instH.UpdateStart)  // 触发在线更新
 
 	return r
 }

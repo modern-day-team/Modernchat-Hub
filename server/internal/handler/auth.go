@@ -107,6 +107,14 @@ func mapErr(c *gin.Context, err error) {
 		fail(c, http.StatusConflict, err.Error())
 	case errors.Is(err, apperr.ErrInstanceNotFound):
 		fail(c, http.StatusNotFound, err.Error())
+	case errors.Is(err, apperr.ErrKindUnknown), errors.Is(err, apperr.ErrUpdateUnsupported):
+		fail(c, http.StatusBadRequest, err.Error())
+	case errors.Is(err, apperr.ErrUpdateBusy):
+		fail(c, http.StatusConflict, err.Error())
+	case errors.Is(err, apperr.ErrTargetAuth):
+		fail(c, http.StatusForbidden, err.Error())
+	case errors.Is(err, apperr.ErrTargetUnreachable):
+		fail(c, http.StatusBadGateway, err.Error())
 	case errors.Is(err, apperr.ErrInvalidCredentials), errors.Is(err, apperr.ErrInvalidToken):
 		fail(c, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, apperr.ErrBanned):

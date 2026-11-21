@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0（2026-11-21）
+
+- feat(adapter)：更新 adapter 落地——`server/internal/adapter/` 定义 `Updater` 窄接口（Check/Status/Start）与 `Registry`（组合根唯一装配点），内置 `modernchatnew.go` 对接主仓库 `/api/admin/update/{status,check,start}`（15s 超时）；目标响应经 `decodeResponse` 统一归一：401/403→凭据无效、404→接口不存在、409→任务进行中、400→部署不支持（目标原因透传）、网络失败→不可达
+- feat(server)：`ServiceInstance` 新增 `kind`（纯数据，空值归一 generic，内核不枚举家族服务类型）；更新编排进 `InstanceService`（解析 adapter → 解密凭据 → 代理调用），REST 端点 `GET /api/v1/services/:id/update/{check,status}`、`POST .../update/start`；未知 kind 一律 400 `该服务类型不支持更新操作`
+- feat(web)：服务表单新增「服务类型」选择；`kind=modernchat-new` 的实例行内出现「更新」入口——更新对话框支持状态轮询（3s）、检查新版本（当前→最新→有/无更新）、开始更新（busy 时禁用）
+- 单测：adapter 目标响应归一七种情形（httptest 假目标）+ 编排三支（凭据解密送达/未知 kind/错误透传）；端到端验证 generic 降级、目标缺接口、假目标全链路（status/check/start）、凭据错误 403
+- 版本同步：`web/package.json` 0.2.0
+
 ## 0.1.0（2026-11-21）
 
 - 仓库定位确立：Modernchat 家族通用型统一管理面板（统一管理后台 + 统一更新管理），核心域模型为「服务实例」，家族特化逻辑经 adapter 窄接口注入内核，不硬编码任何特定服务

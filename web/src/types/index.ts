@@ -16,6 +16,8 @@ export interface ServiceInstance {
   id: number
   name: string
   baseUrl: string
+  /** 服务类型：generic=仅健康/版本探测；其余取值由后端注册的 adapter 决定 */
+  kind: string
   authType: 'none' | 'bearer'
   /** 是否已配置访问凭据（凭据本体永不下发） */
   hasToken: boolean
@@ -26,4 +28,22 @@ export interface ServiceInstance {
   lastVersion?: string
   note?: string
   createdAt: string
+}
+
+/** 更新检查结果（adapter 归一后的跨服务口径） */
+export interface UpdateCheck {
+  currentVersion: string
+  latestVersion: string
+  updateAvailable: boolean
+}
+
+/** 目标服务更新任务的运行状态快照 */
+export interface UpdateStatus {
+  available: boolean
+  busy: boolean
+  phase: string
+  lines?: string[]
+  error?: string
+  currentVersion?: string
+  mode?: string
 }

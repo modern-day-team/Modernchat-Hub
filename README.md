@@ -12,8 +12,8 @@ Modernchat 家族的通用型统一管理面板（Modernchat-Hub）：把家族�
 ## 核心能力
 
 - **统一管理后台**：管理员在 Hub 一处完成家族各站点的用户管理、站点设置、公告、插件上下架、审计等，经各服务的管理 API 远程操作；各服务管理员凭据由 Hub 加密落库托管
-- **统一更新管理**：在 Hub 检测各服务新版本并远程触发更新（对接主仓库在线更新机制；目标服务 `WEB_UPDATE=false` 时优雅降级）
-- **通用内核**：服务注册/连接管理、健康与状态聚合、凭据托管、管理操作代理、版本与更新编排；家族特化逻辑放独立 adapter 包，经窄接口注入内核
+- **统一更新管理（0.2.0 已落地）**：对 `kind=modernchat-new` 的实例，经 adapter 代理主仓库在线更新——检查新版本、轮询更新任务状态、远程触发更新；目标 `WEB_UPDATE=false` 或部署方式不支持时优雅降级（原因透传）；新增家族服务类型 = 新 adapter + 组合根一行注册
+- **通用内核**：服务注册/连接管理、健康与状态聚合、凭据托管、管理操作代理、版本与更新编排；家族特化逻辑放独立 adapter 包（`server/internal/adapter/`），经窄接口注入内核
 
 ## 快速开始
 
@@ -55,6 +55,7 @@ server/
     service/           # 业务规则唯一归属（账号 / 服务实例与探测）
     handler/           # 传输层零业务（绑定/组装/状态码映射）
     middleware/        # 认证 / 管理员角色校验
+    adapter/           # 家族特化适配（Updater 窄接口 + Registry；modernchat-new 已接入）
     router/            # 唯一组合根
 web/
   src/
@@ -78,9 +79,12 @@ web/
 | POST | `/api/v1/sessions` | 登录，返回 `{token,user}` 并种 `mc_auth` cookie |
 | GET | `/api/v1/users/me` | 当前用户（需认证） |
 | DELETE | `/api/v1/sessions/current` | 登出（token_version+1，全部旧 token 失效） |
-| GET / POST | `/api/v1/services` | 服务实例列表 / 注册（需管理员） |
+| GET / POST | `/api/v1/services` | 服务实例列表 / 注册（需管理员；`kind` 为服务类型） |
 | GET / PUT / DELETE | `/api/v1/services/:id` | 详情 / 编辑（token 空值=保持原凭据）/ 删除 |
 | POST | `/api/v1/services/:id/actions/check` | 立即探测健康与版本 |
+| GET | `/api/v1/services/:id/update/check` | 检查目标服务新版本（经 kind 对应 adapter） |
+| GET | `/api/v1/services/:id/update/status` | 目标更新任务状态快照（轮询） |
+| POST | `/api/v1/services/:id/update/start` | 触发目标在线更新（异步） |
 
 ## 约定
 

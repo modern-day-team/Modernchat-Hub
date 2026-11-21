@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/modern-day-team/Modernchat-Hub/server/internal/adapter"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/apperr"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/crypto"
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/model"
@@ -100,8 +101,13 @@ func (r *stubRepo) SaveProbeResult(id uint, status string, _ *string, _ time.Tim
 var jwtSecretForTest = "test-jwt-secret-0123456789abcdef-0123456789"
 
 func newTestService() (*InstanceService, *stubRepo) {
+	return newTestServiceWith(nil)
+}
+
+// newTestServiceWith 可注入 adapter 注册表（更新编排测试用；nil=无任何 adapter）。
+func newTestServiceWith(updates *adapter.Registry) (*InstanceService, *stubRepo) {
 	repo := newStubRepo()
-	return NewInstanceService(repo, crypto.NewBox("", jwtSecretForTest)), repo
+	return NewInstanceService(repo, crypto.NewBox("", jwtSecretForTest), updates), repo
 }
 
 func TestCreateValidation(t *testing.T) {
@@ -112,15 +118,19 @@ func TestCreateValidation(t *testing.T) {
 		create  func() error
 		wantErr error
 	}{
-		{"空名称", func() error { _, err := svc.Create("  ", "http://x.local", "none", "", "", true, ""); return err }, apperr.ErrInvalidInput},
+		{"空名称", func() error { _, err := svc.Create("", "  ", "http://x.local", "none", "", "", true, ""); return err }, apperr.ErrInvalidInput},
 		{"超长名称", func() error {
-			_, err := svc.Create(strings.Repeat("名", 31), "http://x.local", "none", "", "", true, "")
+			_, err := svc.Create("", strings.Repeat("名", 31), "http://x.local", "none", "", "", true, "")
 			return err
 		}, apperr.ErrInvalidInput},
-		{"非 http 协议", func() error { _, err := svc.Create("a", "ftp://x.local", "none", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
-		{"缺主机名", func() error { _, err := svc.Create("a", "http://", "none", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
-		{"未知鉴权方式", func() error { _, err := svc.Create("a", "http://x.local", "basic", "", "", true, ""); return err }, apperr.ErrAuthType},
-		{"bearer 缺凭据", func() error { _, err := svc.Create("a", "http://x.local", "bearer", "", "", true, ""); return err }, apperr.ErrInvalidInput},
+		{"超长 kind", func() error {
+			_, err := svc.Create(strings.Repeat("k", 31), "a", "http://x.local", "none", "", "", true, "")
+			return err
+		}, apperr.ErrInvalidInput},
+		{"非 http 协议", func() error { _, err := svc.Create("", "a", "ftp://x.local", "none", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
+		{"缺主机名", func() error { _, err := svc.Create("", "a", "http://", "none", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
+		{"未知鉴权方式", func() error { _, err := svc.Create("", "a", "http://x.local", "basic", "", "", true, ""); return err }, apperr.ErrAuthType},
+		{"bearer 缺凭据", func() error { _, err := svc.Create("", "a", "http://x.local", "bearer", "", "", true, ""); return err }, apperr.ErrInvalidInput},
 	}
 	for _, tc := range cases {
 		if err := tc.create(); !errors.Is(err, tc.wantErr) {
@@ -132,9 +142,12 @@ func TestCreateValidation(t *testing.T) {
 func TestCreateDefaultsAndUnique(t *testing.T) {
 	svc, _ := newTestService()
 
-	inst, err := svc.Create(" hub-self ", "http://127.0.0.1:8091/", "none", "", "healthz", false, " 说明 ")
+	inst, err := svc.Create("", " hub-self ", "http://127.0.0.1:8091/", "none", "", "healthz", false, " 说明 ")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
+	}
+	if inst.Kind != model.KindGeneric {
+		t.Fatalf("空 kind 应归一为 generic: %q", inst.Kind)
 	}
 	if inst.Name != "hub-self" {
 		t.Fatalf("名称应去空格: %q", inst.Name)
@@ -149,8 +162,8 @@ func TestCreateDefaultsAndUnique(t *testing.T) {
 		t.Fatal("enabled=false 应被保留")
 	}
 
-	// 空健康路径 → 默认 /api/health
-	inst2, err := svc.Create("other", "http://127.0.0.1:8092", "none", "", "", true, "")
+	// 空健康路径 → 默认 /api/health；kind 空值同上
+	inst2, err := svc.Create("", "other", "http://127.0.0.1:8092", "none", "", "", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
@@ -159,7 +172,7 @@ func TestCreateDefaultsAndUnique(t *testing.T) {
 	}
 
 	// 重名 → 409
-	if _, err := svc.Create("hub-self", "http://127.0.0.1:8093", "none", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
+	if _, err := svc.Create("", "hub-self", "http://127.0.0.1:8093", "none", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
 		t.Fatalf("重名应返回 ErrNameTaken: %v", err)
 	}
 }
@@ -168,7 +181,7 @@ func TestCreateBearerSealsToken(t *testing.T) {
 	svc, _ := newTestService()
 	box := crypto.NewBox("", jwtSecretForTest)
 
-	inst, err := svc.Create("authed", "http://10.0.0.1", "bearer", "plain-token", "", true, "")
+	inst, err := svc.Create("", "authed", "http://10.0.0.1", "bearer", "plain-token", "", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
@@ -182,12 +195,12 @@ func TestCreateBearerSealsToken(t *testing.T) {
 
 func TestUpdateKeepsTokenWhenEmpty(t *testing.T) {
 	svc, _ := newTestService()
-	inst, err := svc.Create("a", "http://10.0.0.1", "bearer", "old-token", "", true, "")
+	inst, err := svc.Create("", "a", "http://10.0.0.1", "bearer", "old-token", "", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
 
-	updated, err := svc.Update(inst.ID, "a2", "http://10.0.0.2", "bearer", "", "/api/health", false, "改备注")
+	updated, err := svc.Update(inst.ID, "", "a2", "http://10.0.0.2", "bearer", "", "/api/health", false, "改备注")
 	if err != nil {
 		t.Fatalf("Update() 出错: %v", err)
 	}
@@ -199,10 +212,10 @@ func TestUpdateKeepsTokenWhenEmpty(t *testing.T) {
 	}
 
 	// 改成已有名称 → 409
-	if _, err := svc.Create("b", "http://10.0.0.3", "none", "", "", true, ""); err != nil {
+	if _, err := svc.Create("", "b", "http://10.0.0.3", "none", "", "", true, ""); err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
-	if _, err := svc.Update(inst.ID, "b", "http://10.0.0.2", "none", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
+	if _, err := svc.Update(inst.ID, "", "b", "http://10.0.0.2", "none", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
 		t.Fatalf("改成重名应返回 ErrNameTaken: %v", err)
 	}
 }
@@ -234,7 +247,7 @@ func TestProbeAgainstFakeServer(t *testing.T) {
 	defer ts.Close()
 
 	svc, repo := newTestService()
-	inst, err := svc.Create("fake", ts.URL, "none", "", "/healthz", true, "")
+	inst, err := svc.Create("", "fake", ts.URL, "none", "", "/healthz", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
@@ -272,7 +285,7 @@ func TestProbeFailuresAreData(t *testing.T) {
 	defer ts.Close()
 
 	svc, _ := newTestService()
-	inst, _ := svc.Create("bad", ts.URL, "none", "", "/api/health", true, "")
+	inst, _ := svc.Create("", "bad", ts.URL, "none", "", "/api/health", true, "")
 	got, err := svc.Probe(inst.ID)
 	if err != nil {
 		t.Fatalf("探测失败应作为数据返回，而不是错误: %v", err)
@@ -282,7 +295,7 @@ func TestProbeFailuresAreData(t *testing.T) {
 	}
 
 	// 连不上 → fail
-	inst2, _ := svc.Create("dead", "http://127.0.0.1:1", "none", "", "/healthz", true, "")
+	inst2, _ := svc.Create("", "dead", "http://127.0.0.1:1", "none", "", "/healthz", true, "")
 	got2, err := svc.Probe(inst2.ID)
 	if err != nil {
 		t.Fatalf("探测失败应作为数据返回，而不是错误: %v", err)
@@ -291,18 +304,134 @@ func TestProbeFailuresAreData(t *testing.T) {
 		t.Fatalf("连不上应记录 fail: %q", got2.LastStatus)
 	}
 
-	// 版本端点 404 时健康 ok → ok 但版本为空
+	// 版本端点非 JSON 时健康 ok → ok 但版本为空
 	tsOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK) // /api/version 返回 200 但 body 不是 JSON
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer tsOK.Close()
 	svc2, _ := newTestService()
-	inst3, _ := svc2.Create("ok-only", tsOK.URL, "none", "", "/api/health", true, "")
+	inst3, _ := svc2.Create("", "ok-only", tsOK.URL, "none", "", "/api/health", true, "")
 	got3, err := svc2.Probe(inst3.ID)
 	if err != nil || got3.LastStatus != "ok" {
 		t.Fatalf("健康 ok 应整体 ok: status=%q err=%v", got3.LastStatus, err)
 	}
 	if got3.LastVersion != nil {
 		t.Fatalf("版本解析失败应为 nil: %v", got3.LastVersion)
+	}
+}
+
+// ── 更新编排（adapter 窄接口注入）──
+
+// stubUpdater 假 adapter：记录收到的 base/token，返回预设结果。
+type stubUpdater struct {
+	kind              string
+	gotBase, gotToken string
+	check             *adapter.UpdateCheck
+	err               error
+	starts            int
+}
+
+func (u *stubUpdater) Kind() string { return u.kind }
+
+func (u *stubUpdater) Check(baseURL, token string) (*adapter.UpdateCheck, error) {
+	u.gotBase, u.gotToken = baseURL, token
+	return u.check, u.err
+}
+
+func (u *stubUpdater) Status(baseURL, token string) (*adapter.UpdateStatus, error) {
+	u.gotBase, u.gotToken = baseURL, token
+	return &adapter.UpdateStatus{Available: true, Busy: false, Phase: "idle"}, u.err
+}
+
+func (u *stubUpdater) Start(baseURL, token string) error {
+	u.starts++
+	u.gotBase, u.gotToken = baseURL, token
+	return u.err
+}
+
+func TestUpdateOrchestration(t *testing.T) {
+	reg := adapter.NewRegistry()
+	stub := &stubUpdater{kind: "modernchat-new", check: &adapter.UpdateCheck{
+		CurrentVersion: "v1.0.0", LatestVersion: "v1.1.0", UpdateAvailable: true,
+	}}
+	reg.Register(stub)
+	svc, _ := newTestServiceWith(reg)
+
+	// bearer 实例：adapter 应收到解密后的明文凭据
+	inst, err := svc.Create("modernchat-new", "mcn", "http://10.0.0.9", "bearer", "target-admin-token", "", true, "")
+	if err != nil {
+		t.Fatalf("Create() 出错: %v", err)
+	}
+
+	check, err := svc.UpdateCheck(inst.ID)
+	if err != nil {
+		t.Fatalf("UpdateCheck() 出错: %v", err)
+	}
+	if !check.UpdateAvailable || check.LatestVersion != "v1.1.0" {
+		t.Fatalf("检查结果应透传: %+v", check)
+	}
+	if stub.gotBase != inst.BaseURL || stub.gotToken != "target-admin-token" {
+		t.Fatalf("adapter 应收到 base 与解密后的凭据: base=%q token=%q", stub.gotBase, stub.gotToken)
+	}
+
+	status, err := svc.UpdateStatus(inst.ID)
+	if err != nil {
+		t.Fatalf("UpdateStatus() 出错: %v", err)
+	}
+	if !status.Available || status.Phase != "idle" {
+		t.Fatalf("状态应透传: %+v", status)
+	}
+
+	if err := svc.UpdateStart(inst.ID); err != nil {
+		t.Fatalf("UpdateStart() 出错: %v", err)
+	}
+	if stub.starts != 1 {
+		t.Fatalf("Start 应被调用一次: %d", stub.starts)
+	}
+
+	// 实例不存在
+	if _, err := svc.UpdateCheck(999); !errors.Is(err, apperr.ErrInstanceNotFound) {
+		t.Fatalf("不存在实例应返回 ErrInstanceNotFound: %v", err)
+	}
+}
+
+func TestUpdateUnknownKind(t *testing.T) {
+	reg := adapter.NewRegistry()
+	reg.Register(&stubUpdater{kind: "modernchat-new"})
+	svc, _ := newTestServiceWith(reg)
+
+	// generic：无 adapter，更新操作一律不支持
+	g, _ := svc.Create("", "generic-inst", "http://10.0.0.1", "none", "", "", true, "")
+	if _, err := svc.UpdateCheck(g.ID); !errors.Is(err, apperr.ErrKindUnknown) {
+		t.Fatalf("generic 应返回 ErrKindUnknown: %v", err)
+	}
+	if err := svc.UpdateStart(g.ID); !errors.Is(err, apperr.ErrKindUnknown) {
+		t.Fatalf("generic 启动更新应返回 ErrKindUnknown: %v", err)
+	}
+
+	// 未注册的其他 kind 同样不支持
+	o, _ := svc.Create("some-other", "other-inst", "http://10.0.0.2", "none", "", "", true, "")
+	if _, err := svc.UpdateStatus(o.ID); !errors.Is(err, apperr.ErrKindUnknown) {
+		t.Fatalf("未注册 kind 应返回 ErrKindUnknown: %v", err)
+	}
+
+	// 无注册表（nil）时同理
+	svc2, _ := newTestServiceWith(nil)
+	n, _ := svc2.Create("modernchat-new", "no-registry", "http://10.0.0.3", "none", "", "", true, "")
+	if err := svc2.UpdateStart(n.ID); !errors.Is(err, apperr.ErrKindUnknown) {
+		t.Fatalf("无注册表应返回 ErrKindUnknown: %v", err)
+	}
+}
+
+func TestUpdateAdapterErrorPassthrough(t *testing.T) {
+	// adapter 返回的语义哨兵应原样上抛（handler 负责状态码映射）
+	reg := adapter.NewRegistry()
+	stub := &stubUpdater{kind: "modernchat-new", err: apperr.ErrTargetAuth}
+	reg.Register(stub)
+	svc, _ := newTestServiceWith(reg)
+
+	inst, _ := svc.Create("modernchat-new", "mcn", "http://10.0.0.9", "none", "", "", true, "")
+	if _, err := svc.UpdateCheck(inst.ID); !errors.Is(err, apperr.ErrTargetAuth) {
+		t.Fatalf("adapter 错误应透传: %v", err)
 	}
 }

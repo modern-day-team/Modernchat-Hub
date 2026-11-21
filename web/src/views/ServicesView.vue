@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MessagePlugin } from 'tdesign-vue-next'
 
 import { ApiError } from '@/api/client'
-import type { ServiceUpsert } from '@/api'
+import { servicesApi, type ServiceUpsert } from '@/api'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiCheckbox from '@/components/ui/UiCheckbox.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import { useInstancesStore } from '@/stores/instances'
-import type { ServiceInstance } from '@/types'
+import type { ServiceInstance, UpdateCheck, UpdateStatus } from '@/types'
 
 const { t } = useI18n()
 const instances = useInstancesStore()
@@ -25,6 +25,7 @@ const dialogVisible = ref(false)
 const editing = ref<ServiceInstance | null>(null) // null = 新增
 const saving = ref(false)
 const form = reactive({
+  kind: 'generic',
   name: '',
   baseUrl: '',
   authType: 'none' as 'none' | 'bearer',
@@ -40,6 +41,7 @@ const tokenKeepHint = computed(() => editing.value !== null && editing.value.has
 function openCreate() {
   editing.value = null
   Object.assign(form, {
+    kind: 'generic',
     name: '',
     baseUrl: '',
     authType: 'none' as const,
@@ -54,6 +56,7 @@ function openCreate() {
 function openEdit(inst: ServiceInstance) {
   editing.value = inst
   Object.assign(form, {
+    kind: inst.kind,
     name: inst.name,
     baseUrl: inst.baseUrl,
     authType: inst.authType,
@@ -73,6 +76,7 @@ async function save() {
   }
   saving.value = true
   const body: ServiceUpsert = {
+    kind: form.kind,
     name: form.name,
     baseUrl: form.baseUrl,
     authType: form.authType,
@@ -143,6 +147,75 @@ function statusText(s: ServiceInstance['lastStatus']) {
 function fmtTime(iso?: string) {
   return iso ? new Date(iso).toLocaleString() : t('svc.notProbed')
 }
+
+// ── 更新管理（kind 有对应 adapter 时可用，经后端代理目标服务）──
+const updTarget = ref<ServiceInstance | null>(null)
+const updStatus = ref<UpdateStatus | null>(null)
+const updCheck = ref<UpdateCheck | null>(null)
+const updChecking = ref(false)
+const updStarting = ref(false)
+let updTimer: ReturnType<typeof setInterval> | null = null
+
+async function refreshUpdateStatus(id: number) {
+  try {
+    updStatus.value = await servicesApi.updateStatus(id)
+  } catch (e) {
+    updStatus.value = null
+    if (updTarget.value) MessagePlugin.error(e instanceof ApiError ? e.message : t('svc.failed'))
+  }
+}
+
+function openUpdate(inst: ServiceInstance) {
+  updTarget.value = inst
+  updCheck.value = null
+  void refreshUpdateStatus(inst.id)
+  // 更新任务是异步的：打开期间每 3s 轮询一次状态
+  updTimer = setInterval(() => {
+    void refreshUpdateStatus(inst.id)
+  }, 3000)
+}
+
+function closeUpdate() {
+  updTarget.value = null
+  updStatus.value = null
+  updCheck.value = null
+  if (updTimer) {
+    clearInterval(updTimer)
+    updTimer = null
+  }
+}
+
+onBeforeUnmount(closeUpdate)
+
+async function doCheck() {
+  if (!updTarget.value || updChecking.value) return
+  updChecking.value = true
+  try {
+    updCheck.value = await servicesApi.updateCheck(updTarget.value.id)
+  } catch (e) {
+    MessagePlugin.error(e instanceof ApiError ? e.message : t('svc.failed'))
+  } finally {
+    updChecking.value = false
+  }
+}
+
+async function doStart() {
+  if (!updTarget.value || updStarting.value) return
+  updStarting.value = true
+  try {
+    await servicesApi.updateStart(updTarget.value.id)
+    MessagePlugin.success(t('upd.started'))
+    void refreshUpdateStatus(updTarget.value.id)
+  } catch (e) {
+    MessagePlugin.error(e instanceof ApiError ? e.message : t('svc.failed'))
+  } finally {
+    updStarting.value = false
+  }
+}
+
+function modeText(mode: string) {
+  return mode === 'release' ? t('upd.modeRelease') : mode === 'source' ? t('upd.modeSource') : mode
+}
 </script>
 
 <template>
@@ -169,6 +242,7 @@ function fmtTime(iso?: string) {
             <td>
               <div class="svc__name">
                 {{ inst.name }}
+                <UiTag v-if="inst.kind !== 'generic'" theme="primary" variant="outline" size="small">{{ inst.kind }}</UiTag>
                 <UiTag v-if="!inst.enabled" theme="default" size="small">{{ t('svc.statusUnknown') }}</UiTag>
               </div>
               <div v-if="inst.note" class="svc__note">{{ inst.note }}</div>
@@ -191,6 +265,15 @@ function fmtTime(iso?: string) {
               <UiButton variant="outline" size="small" :loading="checkingId === inst.id" @click="checkRow(inst)">
                 {{ checkingId === inst.id ? t('svc.checking') : t('svc.check') }}
               </UiButton>
+              <UiButton
+                v-if="inst.kind === 'modernchat-new'"
+                variant="text"
+                theme="primary"
+                size="small"
+                @click="openUpdate(inst)"
+              >
+                {{ t('svc.rowUpdate') }}
+              </UiButton>
               <UiButton variant="text" size="small" @click="openEdit(inst)">{{ t('svc.rowEdit') }}</UiButton>
               <UiButton variant="text" theme="danger" size="small" @click="deleteTarget = inst">
                 {{ t('svc.rowDelete') }}
@@ -212,6 +295,14 @@ function fmtTime(iso?: string) {
       @confirm="save"
     >
       <form class="svc-form" @submit.prevent>
+        <div class="svc-form__field">
+          <span class="ui-label">{{ t('svc.kind') }}</span>
+          <select v-model="form.kind" class="svc-form__select">
+            <option value="generic">{{ t('svc.kindGeneric') }}</option>
+            <option value="modernchat-new">{{ t('svc.kindModernchatNew') }}</option>
+          </select>
+          <span class="ui-hint">{{ t('svc.kindHint') }}</span>
+        </div>
         <label class="svc-form__field">
           <span class="ui-label">{{ t('svc.name') }}</span>
           <UiInput v-model="form.name" :placeholder="t('svc.namePlaceholder')" :maxlength="30" clearable />
@@ -260,6 +351,57 @@ function fmtTime(iso?: string) {
       @close="deleteTarget = null"
     >
       {{ deleteTarget ? t('svc.deleteMsg', { name: deleteTarget.name }) : '' }}
+    </UiDialog>
+
+    <!-- 更新管理（经后端 adapter 代理目标服务的在线更新） -->
+    <UiDialog
+      :visible="updTarget !== null"
+      :header="t('upd.title')"
+      :width="520"
+      :footer="false"
+      @update:visible="(v: boolean) => { if (!v) closeUpdate() }"
+      @close="closeUpdate"
+    >
+      <div v-if="updTarget" class="upd">
+        <div class="upd__row">
+          <span class="svc__name">{{ updTarget.name }}</span>
+          <UiTag v-if="updTarget.lastVersion" theme="default" variant="outline" size="small">
+            {{ t('svc.version') }} {{ updTarget.lastVersion }}
+          </UiTag>
+        </div>
+        <div class="upd__row">
+          <span class="ui-label">{{ t('upd.status') }}</span>
+          <UiTag
+            v-if="updStatus"
+            :theme="!updStatus.available ? 'default' : updStatus.busy ? 'warning' : 'success'"
+            size="small"
+          >
+            {{ !updStatus.available ? t('upd.unsupportedShort') : updStatus.busy ? t('upd.busy') : t('upd.idle') }}
+          </UiTag>
+          <span v-if="updStatus?.mode" class="upd__mode">{{ modeText(updStatus.mode) }}</span>
+          <span class="upd__phase">{{ updStatus?.phase }}</span>
+        </div>
+        <div v-if="updStatus?.error" class="upd__error">{{ updStatus.error }}</div>
+        <div v-if="updCheck" class="upd__check">
+          <span>{{ t('upd.current') }}: {{ updCheck.currentVersion || '—' }}</span>
+          <span>{{ t('upd.latest') }}: {{ updCheck.latestVersion || '—' }}</span>
+          <UiTag :theme="updCheck.updateAvailable ? 'warning' : 'success'" size="small">
+            {{ updCheck.updateAvailable ? t('upd.available') : t('upd.upToDate') }}
+          </UiTag>
+        </div>
+        <div v-if="updStatus?.lines?.length" class="upd__lines">
+          <div v-for="(line, i) in updStatus.lines" :key="i" class="upd__line">{{ line }}</div>
+        </div>
+        <div class="upd__ops">
+          <UiButton variant="outline" size="small" :loading="updChecking" @click="doCheck">
+            {{ t('upd.check') }}
+          </UiButton>
+          <UiButton theme="primary" size="small" :loading="updStarting" @click="doStart">
+            {{ t('upd.start') }}
+          </UiButton>
+        </div>
+        <p class="ui-hint">{{ t('upd.hint') }}</p>
+      </div>
     </UiDialog>
   </div>
 </template>
@@ -379,5 +521,74 @@ function fmtTime(iso?: string) {
 
 .svc-form__select:focus {
   border-color: var(--td-brand-color);
+}
+
+/* 更新管理对话框 */
+.upd {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upd__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--mc-fs-body);
+}
+
+.upd__mode {
+  color: var(--td-text-color-secondary);
+  font-size: var(--mc-fs-sm);
+}
+
+.upd__phase {
+  color: var(--td-text-color-placeholder);
+  font-size: var(--mc-fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upd__error {
+  padding: 8px 10px;
+  border-radius: var(--mc-radius-sm);
+  background: var(--td-error-color);
+  color: #fff;
+  font-size: var(--mc-fs-sm);
+  word-break: break-all;
+}
+
+.upd__check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--mc-hairline);
+  border-radius: var(--mc-radius-md);
+  font-size: var(--mc-fs-body);
+}
+
+.upd__lines {
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: var(--mc-radius-md);
+  background: var(--td-bg-color-page);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: var(--mc-fs-sm);
+  line-height: 1.6;
+  color: var(--td-text-color-secondary);
+}
+
+.upd__line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.upd__ops {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

@@ -1,8 +1,9 @@
 import { http } from './client'
-import type { ServiceInstance, User } from '@/types'
+import type { ServiceInstance, UpdateCheck, UpdateStatus, User } from '@/types'
 
 /** 服务实例表单载荷（camelCase，与后端 handler 契约一致；token 空值=保持原凭据） */
 export interface ServiceUpsert {
+  kind?: string
   name: string
   baseUrl: string
   authType: 'none' | 'bearer'
@@ -25,11 +26,15 @@ export const authApi = {
   logout: () => http.delete<void>('/sessions/current'),
 }
 
-/** 服务实例端点（RESTful：/api/v1/services，探测走子资源 actions/check） */
+/** 服务实例端点（RESTful：/api/v1/services，探测走子资源 actions/check，更新走 update 子资源） */
 export const servicesApi = {
   list: () => http.get<ServiceInstance[]>('/services'),
   create: (body: ServiceUpsert) => http.post<ServiceInstance>('/services', body),
   update: (id: number, body: ServiceUpsert) => http.put<ServiceInstance>(`/services/${id}`, body),
   remove: (id: number) => http.delete<void>(`/services/${id}`),
   check: (id: number) => http.post<ServiceInstance>(`/services/${id}/actions/check`),
+  /** 更新编排（经 kind 对应 adapter 代理目标服务） */
+  updateCheck: (id: number) => http.get<UpdateCheck>(`/services/${id}/update/check`),
+  updateStatus: (id: number) => http.get<UpdateStatus>(`/services/${id}/update/status`),
+  updateStart: (id: number) => http.post<{ started: boolean }>(`/services/${id}/update/start`),
 }
