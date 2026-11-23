@@ -34,19 +34,22 @@ func (s *OAuthStore) SaveCode(c *model.OAuthCode) error {
 	return s.db.Create(c).Error
 }
 
-// TakeCode 原子核销授权码：hash 命中、未使用、未过期才置 used_at。
-// 用条件 UPDATE 而非先读后写，避免并发重复兑换。
+// TakeCode 原子核销授权码：用单条条件 UPDATE + RowsAffected 判断，
+// 不用「先读后写」事务——后者在 MySQL RR 隔离下并发兑换会双读成功。
 func (s *OAuthStore) TakeCode(codeHash, clientID, redirectURI string, now time.Time) (*model.OAuthCode, error) {
 	var c model.OAuthCode
 	err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where(
+		res := tx.Model(&model.OAuthCode{}).Where(
 			"code_hash = ? AND client_id = ? AND redirect_uri = ? AND used_at IS NULL AND expires_at > ?",
 			codeHash, clientID, redirectURI, now,
-		).First(&c).Error; err != nil {
-			return err
+		).Update("used_at", now)
+		if res.Error != nil {
+			return res.Error
 		}
-		return tx.Model(&model.OAuthCode{}).Where("id = ?", c.ID).
-			Update("used_at", now).Error
+		if res.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound // 已被并发消费 / 过期 / 参数不匹配
+		}
+		return tx.Where("code_hash = ?", codeHash).First(&c).Error
 	})
 	if err != nil {
 		return nil, err

@@ -8,9 +8,13 @@ package service
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"log/slog"
+	"net/url"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -60,6 +64,40 @@ func hash256(s string) string {
 	return hex.EncodeToString(h[:])
 }
 
+// validRedirectURI 生产必须是 https；仅本机开发允许 http。
+// 授权码经此 URL 回传，明文 http 会在公网被截获。
+func validRedirectURI(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.Fragment != "" {
+		return false
+	}
+	if u.Scheme == "https" {
+		return true
+	}
+	if u.Scheme != "http" {
+		return false
+	}
+	h := strings.ToLower(u.Hostname())
+	return h == "localhost" || h == "127.0.0.1" || h == "::1"
+}
+
+// scopeAllowed 请求的 scope 必须全部在客户端注册范围内（防越权申请权限）。
+func scopeAllowed(requested, registered string) bool {
+	if strings.TrimSpace(requested) == "" {
+		return true
+	}
+	allowed := map[string]bool{}
+	for _, s := range strings.Fields(registered) {
+		allowed[s] = true
+	}
+	for _, s := range strings.Fields(requested) {
+		if !allowed[s] {
+			return false
+		}
+	}
+	return true
+}
+
 func randomToken(bytes int) (string, error) {
 	raw := make([]byte, bytes)
 	if _, err := rand.Read(raw); err != nil {
@@ -70,7 +108,7 @@ func randomToken(bytes int) (string, error) {
 
 // RegisterClient 注册 OAuth 客户端（返回明文 secret，仅此一次；库里只存 hash）。
 func (s *OAuthService) RegisterClient(clientID, redirectURI, scopes string) (string, error) {
-	if clientID == "" || len(clientID) > 64 || redirectURI == "" || len(redirectURI) > 255 {
+	if clientID == "" || len(clientID) > 64 || redirectURI == "" || len(redirectURI) > 255 || !validRedirectURI(redirectURI) {
 		return "", apperr.ErrInvalidInput
 	}
 	if scopes == "" {
@@ -108,6 +146,9 @@ func (s *OAuthService) Authorize(clientID, redirectURI, scope string, userID uin
 	if !c.Enabled || c.RedirectURI != redirectURI {
 		return "", apperr.ErrOAuthRedirect
 	}
+	if !scopeAllowed(scope, c.Scopes) {
+		return "", apperr.ErrInvalidInput
+	}
 	code, err := randomToken(32)
 	if err != nil {
 		return "", err
@@ -126,6 +167,7 @@ func (s *OAuthService) Authorize(clientID, redirectURI, scope string, userID uin
 	if err != nil {
 		return "", err
 	}
+	slog.Info("OAuth 授权码已发放", "client", clientID, "user", userID)
 	return code, nil
 }
 
@@ -138,7 +180,8 @@ func (s *OAuthService) Exchange(clientID, secret, code, redirectURI string) (str
 		}
 		return "", err
 	}
-	if !c.Enabled || c.SecretHash != hash256(secret) {
+	// 常量时间比较，防时序侧信道推断 secret（长度固定 64 hex，Compare 安全）
+	if !c.Enabled || subtle.ConstantTimeCompare([]byte(c.SecretHash), []byte(hash256(secret))) != 1 {
 		return "", apperr.ErrOAuthClient
 	}
 	cc, err := s.store.TakeCode(hash256(code), clientID, redirectURI, time.Now())
@@ -162,6 +205,7 @@ func (s *OAuthService) Exchange(clientID, secret, code, redirectURI string) (str
 	if err != nil {
 		return "", err
 	}
+	slog.Info("OAuth 令牌已签发", "client", clientID, "user", cc.UserID)
 	return token, nil
 }
 

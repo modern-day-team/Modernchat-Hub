@@ -4,6 +4,7 @@
 
 - feat(oauth)：**统一登录中心（OAuth Provider）落地**——新增 `oauth_clients` / `oauth_codes` / `oauth_tokens` 三表（secret / code / token 只存 SHA-256，授权码核销用条件 UPDATE 原子防并发重放）；`GET /oauth/authorize`（需 Hub 登录态、state 原样回传、redirect_uri 精确白名单）、`POST /api/oauth/token`（**JSON body 无 grant_type**，错误仍返回 200 + `{"error"}` 与主仓库客户端口径一致）、`GET /api/oauth/userinfo`（`sub/username/nickname/email/avatar`）；管理员 `POST /api/v1/oauth/clients` 注册客户端，明文 secret 仅返回一次
 - feat(web)：概览页管理员可见「统一登录中心」卡片，注册 client_id / redirect_uri / scope 并一次性展示 clientSecret；新增 `oauth.*` 中英文案
+- security(oauth)：client_secret 校验改常量时间比较（防时序侧信道）；授权码核销改为单条条件 UPDATE + RowsAffected（防 MySQL RR 下并发重复兑换）；注册客户端校验 redirect_uri 必须为 https（仅 localhost 允许 http）且禁带 fragment；authorize 校验请求 scope ⊆ 注册 scopes；三端点挂 IP 限流（10/20 次每分）；发码/签令牌记审计日志（不含明文凭据）
 - 契约对齐：主仓库 `modern-chat-new` 的 SSO 客户端零改动，只需 `SSO_HUB_URL` 指向 Hub、`SSO_CLIENT_ID/SECRET` 填注册值；授权码 5 分钟、访问令牌 24 小时，令牌可撤销；`oauthTokenTTL` 24h 与主仓库票据 5min 为不同层，勿混
 
 - feat(adapter)：`Adminer` 窄接口扩展插件、审计、公告能力——`AdminPluginPage` / `AdminAuditPage` / `AnnounceResult` 归一化结构；`modernchatnew.go` 代理主仓库 `GET /api/admin/plugins`、`POST /api/admin/plugins/global-disable`、`GET /api/admin/audits`、`POST /api/admin/announce`（空集归一为 `[]`，错误沿用 `decodeResponse` 语义映射）

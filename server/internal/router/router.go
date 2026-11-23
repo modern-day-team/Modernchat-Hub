@@ -58,10 +58,14 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	// 契约对齐主仓库 SSO 客户端：/oauth/authorize + /api/oauth/{token,userinfo}。
 	oauthSvc := service.NewOAuthService(oauthStore)
 	oauthH := handler.NewOAuthHandler(oauthSvc)
-	r.GET("/oauth/authorize", authMw, oauthH.Authorize)
+	// OAuth 端点 IP 限流：authorize 防授权洪泛，token 防 code/secret 暴力枚举，
+	// userinfo 挂Bearer本身有令牌校验，限流防窃取令牌后的高频拉取。
+	oauthAuthorizeLimiter := middleware.NewIPRateLimiter(10).Middleware()
+	oauthTokenLimiter := middleware.NewIPRateLimiter(20).Middleware()
+	r.GET("/oauth/authorize", oauthAuthorizeLimiter, authMw, oauthH.Authorize)
 	op := r.Group("/api/oauth")
-	op.POST("/token", oauthH.Token)
-	op.GET("/userinfo", oauthH.UserInfo)
+	op.POST("/token", oauthTokenLimiter, oauthH.Token)
+	op.GET("/userinfo", oauthTokenLimiter, oauthH.UserInfo)
 
 	// adapter 注册表：项目组特化能力在此装配；内核不感知具体项目组服务
 	updates := adapter.NewRegistry()
