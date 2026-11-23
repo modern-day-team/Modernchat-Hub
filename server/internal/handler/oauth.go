@@ -13,17 +13,21 @@ import (
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/service"
 )
 
-// OAuthManage 客户端注册窄接口（由 service.OAuthService 实现）。
+// OAuthManage 消费方定义的窄接口：涵盖 handler 需要的全部 OAuth 能力。
+// service.OAuthService 实现它；单测可用假实现，handler 不绑定具体 service 类型。
 type OAuthManage interface {
 	RegisterClient(clientID, redirectURI, scopes string) (string, error)
+	Authorize(clientID, redirectURI, scope string, userID uint) (string, error)
+	Exchange(clientID, secret, code, redirectURI string) (string, error)
+	UserInfo(token string) (*service.UserInfoView, error)
 }
 
 // OAuthHandler OAuth Provider 端点。
 type OAuthHandler struct {
-	oauth *service.OAuthService
+	oauth OAuthManage
 }
 
-func NewOAuthHandler(oauth *service.OAuthService) *OAuthHandler {
+func NewOAuthHandler(oauth OAuthManage) *OAuthHandler {
 	return &OAuthHandler{oauth: oauth}
 }
 

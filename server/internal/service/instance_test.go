@@ -105,7 +105,7 @@ func newTestService() (*InstanceService, *stubRepo) {
 }
 
 // newTestServiceWith 可注入 adapter 注册表（更新编排测试用；nil=无任何 adapter）。
-func newTestServiceWith(updates *adapter.Registry) (*InstanceService, *stubRepo) {
+func newTestServiceWith(updates adapterResolver) (*InstanceService, *stubRepo) {
 	repo := newStubRepo()
 	return NewInstanceService(repo, crypto.NewBox("", jwtSecretForTest), updates), repo
 }

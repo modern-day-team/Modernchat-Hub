@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- refactor(架构)：高内聚低耦合治理——`service.InstanceService` 依赖消费方定义的 `adapterResolver` 窄接口而非 `*adapter.Registry` 具体实现；`OAuthHandler` 改为注入完整 `OAuthManage` 窄接口（不再绑定 `*service.OAuthService`）；Web 代理目标统一到 `HUB_API_TARGET`（dev/preview 共用一处配置）
 - feat(oauth)：**统一登录中心（OAuth Provider）落地**——新增 `oauth_clients` / `oauth_codes` / `oauth_tokens` 三表（secret / code / token 只存 SHA-256，授权码核销用条件 UPDATE 原子防并发重放）；`GET /oauth/authorize`（需 Hub 登录态、state 原样回传、redirect_uri 精确白名单）、`POST /api/oauth/token`（**JSON body 无 grant_type**，错误仍返回 200 + `{"error"}` 与主仓库客户端口径一致）、`GET /api/oauth/userinfo`（`sub/username/nickname/email/avatar`）；管理员 `POST /api/v1/oauth/clients` 注册客户端，明文 secret 仅返回一次
 - feat(web)：概览页管理员可见「统一登录中心」卡片，注册 client_id / redirect_uri / scope 并一次性展示 clientSecret；新增 `oauth.*` 中英文案
 - security(oauth)：client_secret 校验改常量时间比较（防时序侧信道）；授权码核销改为单条条件 UPDATE + RowsAffected（防 MySQL RR 下并发重复兑换）；注册客户端校验 redirect_uri 必须为 https（仅 localhost 允许 http）且禁带 fragment；authorize 校验请求 scope ⊆ 注册 scopes；三端点挂 IP 限流（10/20 次每分）；发码/签令牌记审计日志（不含明文凭据）

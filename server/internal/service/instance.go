@@ -44,15 +44,22 @@ type instanceRepo interface {
 	SaveProbeResult(id uint, status string, version *string, checkedAt time.Time) error
 }
 
+// adapterResolver 消费方定义的窄接口：只按 kind 解析能力，不暴露注册表的实现机制。
+// 由 *adapter.Registry 在组合根注入；单测可用 map 假实现。
+type adapterResolver interface {
+	Updater(kind string) (adapter.Updater, bool)
+	Adminer(kind string) (adapter.Adminer, bool)
+}
+
 // InstanceService 服务实例业务：注册/编辑/探测/更新编排的规则唯一归属地。
 type InstanceService struct {
 	repo    instanceRepo
 	box     *crypto.Box
-	updates *adapter.Registry // 更新 adapter 注册表（组合根装配；可 nil，此时更新操作一律不支持）
+	updates adapterResolver // 只依赖窄接口，不再绑定 *adapter.Registry 具体实现
 }
 
 // NewInstanceService 构造。
-func NewInstanceService(repo instanceRepo, box *crypto.Box, updates *adapter.Registry) *InstanceService {
+func NewInstanceService(repo instanceRepo, box *crypto.Box, updates adapterResolver) *InstanceService {
 	return &InstanceService{repo: repo, box: box, updates: updates}
 }
 
