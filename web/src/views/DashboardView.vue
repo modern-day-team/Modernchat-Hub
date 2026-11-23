@@ -4,13 +4,17 @@ import { useI18n } from 'vue-i18n'
 import { MessagePlugin } from 'tdesign-vue-next'
 
 import { ApiError } from '@/api/client'
+import { servicesApi } from '@/api'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useInstancesStore } from '@/stores/instances'
 import type { ServiceInstance } from '@/types'
 
 const { t } = useI18n()
 const instances = useInstancesStore()
+const auth = useAuthStore()
 const loaded = ref(false)
 const checkingAll = ref(false)
 
@@ -50,6 +54,35 @@ function statusText(s: ServiceInstance['lastStatus']) {
 
 function fmtTime(iso?: string) {
   return iso ? new Date(iso).toLocaleString() : t('dash.none')
+}
+
+// ── OAuth 客户端注册（统一登录中心；仅管理员可见）──
+const oauthClientID = ref('')
+const oauthRedirect = ref('')
+const oauthScopes = ref('profile')
+const oauthSecret = ref('')
+const registeringOAuth = ref(false)
+
+async function registerOAuthClient() {
+  if (registeringOAuth.value) return
+  if (!oauthClientID.value.trim() || !oauthRedirect.value.trim()) {
+    MessagePlugin.warning(t('oauth.required'))
+    return
+  }
+  registeringOAuth.value = true
+  try {
+    const r = await servicesApi.registerOAuthClient({
+      clientId: oauthClientID.value.trim(),
+      redirectUri: oauthRedirect.value.trim(),
+      scopes: oauthScopes.value.trim() || undefined,
+    })
+    oauthSecret.value = r.clientSecret
+    MessagePlugin.success(t('oauth.created'))
+  } catch (e) {
+    MessagePlugin.error(e instanceof ApiError ? e.message : t('svc.failed'))
+  } finally {
+    registeringOAuth.value = false
+  }
 }
 </script>
 
@@ -107,6 +140,33 @@ function fmtTime(iso?: string) {
         </tbody>
       </table>
     </div>
+
+    <!-- 统一登录中心：OAuth 客户端注册（仅管理员） -->
+    <div v-if="auth.user?.role === 'admin'" class="dash__panel ui-panel oauth">
+      <h2 class="oauth__title">{{ t('oauth.title') }}</h2>
+      <p class="oauth__hint">{{ t('oauth.hint') }}</p>
+      <div class="oauth__form">
+        <label>
+          <span class="ui-label">client_id</span>
+          <UiInput v-model="oauthClientID" :placeholder="t('oauth.clientIdPlaceholder')" />
+        </label>
+        <label>
+          <span class="ui-label">redirect_uri</span>
+          <UiInput v-model="oauthRedirect" :placeholder="t('oauth.redirectPlaceholder')" />
+        </label>
+        <label>
+          <span class="ui-label">scope</span>
+          <UiInput v-model="oauthScopes" placeholder="profile" />
+        </label>
+        <UiButton theme="primary" :loading="registeringOAuth" @click="registerOAuthClient">
+          {{ t('oauth.register') }}
+        </UiButton>
+      </div>
+      <div v-if="oauthSecret" class="oauth__secret">
+        <p class="oauth__hint">{{ t('oauth.secretHint') }}</p>
+        <code>{{ oauthSecret }}</code>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -122,6 +182,47 @@ function fmtTime(iso?: string) {
   margin: 0;
   font-size: var(--mc-fs-title);
   font-weight: 600;
+}
+
+.oauth {
+  margin-top: 16px;
+  padding: 16px 20px;
+}
+
+.oauth__title {
+  margin: 0 0 4px;
+  font-size: var(--mc-fs-title);
+}
+
+.oauth__hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--mc-text-faint);
+}
+
+.oauth__form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.oauth__form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.oauth__secret {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--mc-hairline);
+  border-radius: var(--mc-radius-md);
+}
+
+.oauth__secret code {
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .dash__cards {

@@ -1,6 +1,8 @@
 # Unified-Console
 
-Modernchat 项目组的通用型统一管理面板（Modernchat-Hub）：把项目组各服务的站长后台收敛到一处——**统一管理后台 + 统一更新管理**。核心域模型是「服务实例」：名称、base URL、鉴权方式、健康检查端点全部数据化配置，内核不硬编码任何特定服务的逻辑；新增一个被管理服务 = 注册配置 +（必要时）一个 adapter，不改内核代码。
+Modernchat 项目组的通用型统一管理面板（Modernchat-Hub）：把项目组各服务的站长后台收敛到一处——**统一管理后台 + 统一更新管理 + 统一登录中心（OAuth Provider）**。核心域模型是「服务实例」：名称、base URL、鉴权方式、健康检查端点全部数据化配置，内核不硬编码任何特定服务的逻辑；新增一个被管理服务 = 注册配置 +（必要时）一个 adapter，不改内核代码。
+
+**统一登录中心（2026-11-23）**：Hub 作为 OAuth Provider，向项目组服务发授权码与访问令牌；主仓库 `modern-chat-new` 的 SSO 客户端无需改代码，只需把 `SSO_HUB_URL` 指向 Hub、`SSO_CLIENT_ID/SECRET` 配成 Hub 注册的客户端。Hub 只做协议中心与用户资料源（Hub 用户表），SSO 服务继续承担独立账号门户。
 
 ## 技术栈
 
@@ -74,6 +76,10 @@ web/
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/healthz` | 探活（免鉴权） |
+| GET | `/oauth/authorize` | OAuth 授权端点（需登录 Hub；`client_id`/`redirect_uri`/`state` → 302 带 code&state） |
+| POST | `/api/oauth/token` | OAuth 令牌端点（JSON body 无 `grant_type`；返回 `access_token`） |
+| GET | `/api/oauth/userinfo` | OAuth 用户资料（Bearer token；`sub/username/nickname/email/avatar`） |
+| POST | `/api/v1/oauth/clients` | 注册 OAuth 客户端（管理员；返回一次性明文 secret） |
 | GET | `/api/version` | 版本 `{version,commit,buildTime}`（免鉴权） |
 | POST | `/api/v1/users` | 注册（首个注册者自动成为 admin） |
 | POST | `/api/v1/sessions` | 登录，返回 `{token,user}` 并种 `mc_auth` cookie |

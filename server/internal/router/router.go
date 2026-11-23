@@ -20,7 +20,7 @@ import (
 )
 
 // Setup 装配全部路由。
-func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceStore, attempts *store.LoginAttemptStore, box *crypto.Box) *gin.Engine {
+func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceStore, attempts *store.LoginAttemptStore, oauthStore *store.OAuthStore, box *crypto.Box) *gin.Engine {
 	// gin.New 而非 Default：模式由 config 统一控制（release 下无 debug 告警），
 	// 中间件显式装配（Logger + Recovery）
 	r := gin.New()
@@ -54,6 +54,15 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	authH := handler.NewAuthHandler(accounts, cfg.CookieSecure)
 	authMw := middleware.Auth(accounts) // *service.AccountService 满足窄接口 Authenticator
 
+	// OAuth Provider：Hub 作为项目组统一登录中心，给主仓库等客户端发授权码/令牌。
+	// 契约对齐主仓库 SSO 客户端：/oauth/authorize + /api/oauth/{token,userinfo}。
+	oauthSvc := service.NewOAuthService(oauthStore)
+	oauthH := handler.NewOAuthHandler(oauthSvc)
+	r.GET("/oauth/authorize", authMw, oauthH.Authorize)
+	op := r.Group("/api/oauth")
+	op.POST("/token", oauthH.Token)
+	op.GET("/userinfo", oauthH.UserInfo)
+
 	// adapter 注册表：项目组特化能力在此装配；内核不感知具体项目组服务
 	updates := adapter.NewRegistry()
 	mcn := adapter.NewModernchatNew()
@@ -76,6 +85,7 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 
 	// 服务实例管理：面板是管理后台，实例 CRUD 只对管理员开放
 	admin := authed.Group("", middleware.Admin())
+	admin.POST("/oauth/clients", oauthH.RegisterClient)       // 注册 OAuth 客户端（返回一次性明文 secret）
 	admin.GET("/services", instH.List)                        // 列表
 	admin.POST("/services", instH.Create)                     // 注册实例
 	admin.GET("/services/:id", instH.Get)                     // 详情

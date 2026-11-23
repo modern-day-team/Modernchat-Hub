@@ -176,4 +176,14 @@ export default {
     settingsSave: '保存设置',
     settingsDone: '站点设置已保存',
   },
+  oauth: {
+    title: '统一登录中心 · OAuth 客户端',
+    hint: '注册项目组服务的 OAuth 客户端。redirect_uri 精确匹配；clientSecret 只显示一次，请立即保存到目标服务配置（主仓库为 SSO_CLIENT_ID / SSO_CLIENT_SECRET）。',
+    clientIdPlaceholder: '如 modern-chat-new',
+    redirectPlaceholder: '如 https://chat.example.com/api/auth/sso/callback',
+    register: '注册客户端',
+    required: '请填写 client_id 与 redirect_uri',
+    created: '客户端已注册',
+    secretHint: '一次性 clientSecret（关闭页面后不再显示）：',
+  },
 }

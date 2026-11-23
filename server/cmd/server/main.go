@@ -44,7 +44,7 @@ func main() {
 	// IdleTimeout 回收 keep-alive 空闲连接（默认无上限）。
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           router.Setup(cfg, store.NewUserStore(db), store.NewInstanceStore(db), store.NewLoginAttemptStore(db), box),
+		Handler:           router.Setup(cfg, store.NewUserStore(db), store.NewInstanceStore(db), store.NewLoginAttemptStore(db), store.NewOAuthStore(db), box),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       90 * time.Second,
 	}

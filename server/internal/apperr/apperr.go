@@ -27,4 +27,10 @@ var (
 	ErrTargetAuth        = errors.New("目标服务凭据无效或权限不足")
 	ErrUpdateUnsupported = errors.New("目标服务不支持在线更新")
 	ErrUpdateBusy        = errors.New("目标服务已有更新任务进行中")
+
+	// OAuth Provider 域
+	ErrOAuthClient   = errors.New("OAuth 客户端不合法")
+	ErrOAuthRedirect = errors.New("回调地址未注册")
+	ErrOAuthCode     = errors.New("授权码无效或已使用")
+	ErrOAuthToken    = errors.New("访问令牌无效")
 )

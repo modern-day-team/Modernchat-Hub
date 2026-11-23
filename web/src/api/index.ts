@@ -85,4 +85,10 @@ export const servicesApi = {
   adminSettings: (id: number) => http.get<Record<string, unknown>>(`/services/${id}/admin/settings`),
   adminSaveSettings: (id: number, patch: Record<string, unknown>) =>
     http.put<Record<string, unknown>>(`/services/${id}/admin/settings`, patch),
+  /** OAuth Provider：注册客户端（返回一次性明文 secret，仅管理员） */
+  registerOAuthClient: (body: { clientId: string; redirectUri: string; scopes?: string }) =>
+    http.post<{ clientId: string; clientSecret: string; redirectUri: string; note: string }>(
+      '/oauth/clients',
+      body,
+    ),
 }

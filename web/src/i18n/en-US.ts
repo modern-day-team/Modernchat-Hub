@@ -176,4 +176,14 @@ export default {
     settingsSave: 'Save settings',
     settingsDone: 'Site settings saved',
   },
+  oauth: {
+    title: 'Unified sign-in · OAuth clients',
+    hint: 'Register OAuth clients for project services. redirect_uri is matched exactly; clientSecret is shown once — save it into the target service config (modern-chat-new: SSO_CLIENT_ID / SSO_CLIENT_SECRET).',
+    clientIdPlaceholder: 'e.g. modern-chat-new',
+    redirectPlaceholder: 'e.g. https://chat.example.com/api/auth/sso/callback',
+    register: 'Register client',
+    required: 'Enter client_id and redirect_uri',
+    created: 'Client registered',
+    secretHint: 'One-time clientSecret (hidden after leaving this page):',
+  },
 }

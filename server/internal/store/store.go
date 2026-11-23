@@ -30,7 +30,10 @@ func Open(dsn string, autoMigrate bool) (*gorm.DB, error) {
 	sqlDB.SetMaxIdleConns(50)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 	if autoMigrate {
-		if err := db.AutoMigrate(&model.User{}, &model.ServiceInstance{}, &model.LoginAttempt{}); err != nil {
+		if err := db.AutoMigrate(
+			&model.User{}, &model.ServiceInstance{}, &model.LoginAttempt{},
+			&model.OAuthClient{}, &model.OAuthCode{}, &model.OAuthToken{},
+		); err != nil {
 			return nil, err
 		}
 	}
