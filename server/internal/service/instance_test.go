@@ -553,6 +553,16 @@ func (a *stubAdminer) Announce(baseURL, token, _ string) (*adapter.AnnounceResul
 	return &adapter.AnnounceResult{OK: true}, a.err
 }
 
+func (a *stubAdminer) Settings(baseURL, token string) (map[string]any, error) {
+	a.gotBase, a.gotToken = baseURL, token
+	return map[string]any{"site": map[string]any{"name": "测试站"}}, a.err
+}
+
+func (a *stubAdminer) SaveSettings(baseURL, token string, _ map[string]any) (map[string]any, error) {
+	a.gotBase, a.gotToken = baseURL, token
+	return map[string]any{"ok": true}, a.err
+}
+
 // 编译期断言：假管理 adapter 满足窄接口。
 var _ adapter.Adminer = (*stubAdminer)(nil)
 

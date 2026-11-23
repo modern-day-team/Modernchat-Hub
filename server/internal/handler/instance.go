@@ -44,6 +44,8 @@ type InstanceAdmin interface {
 	AdminSetPluginGlobalDisabled(id uint, name string, disabled bool) (int64, error)
 	AdminAudits(id uint, page, pageSize int) (*adapter.AdminAuditPage, error)
 	AdminAnnounce(id uint, content string) (*adapter.AnnounceResult, error)
+	AdminSettings(id uint) (map[string]any, error)
+	AdminSaveSettings(id uint, patch map[string]any) (map[string]any, error)
 }
 
 // InstanceHandler 服务实例端点（RESTful：/api/v1/services + update/admin 子资源）。
@@ -464,6 +466,39 @@ func (h *InstanceHandler) AdminAnnounce(c *gin.Context) {
 		return
 	}
 	res, err := h.admins.AdminAnnounce(id, content)
+	if err != nil {
+		mapErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+// AdminSettings 目标站点设置读取。
+func (h *InstanceHandler) AdminSettings(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	res, err := h.admins.AdminSettings(id)
+	if err != nil {
+		mapErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+// AdminSaveSettings 写入目标站点设置（七组配置原样透传，敏感字段留空=不修改）。
+func (h *InstanceHandler) AdminSaveSettings(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var patch map[string]any
+	if err := c.ShouldBindJSON(&patch); err != nil || len(patch) == 0 {
+		fail(c, http.StatusBadRequest, "参数不合法：请求体须为非空 JSON 对象")
+		return
+	}
+	res, err := h.admins.AdminSaveSettings(id, patch)
 	if err != nil {
 		mapErr(c, err)
 		return

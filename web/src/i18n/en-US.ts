@@ -169,5 +169,11 @@ export default {
     announceRequired: 'Enter announcement content',
     announceDone: 'Announcement sent to {count} recipients',
     send: 'Send',
+    settings: 'Site settings',
+    settingsHint: 'Edit the target service config groups as JSON. Submit only the groups you want to change; remove untouched groups entirely.',
+    settingsSecretHint: 'hasXxx fields mean a secret is configured. Leave secret fields empty or omit them to keep the current value — plaintext secrets are never returned.',
+    settingsInvalid: 'Invalid JSON, please check and retry',
+    settingsSave: 'Save settings',
+    settingsDone: 'Site settings saved',
   },
 }

@@ -140,6 +140,10 @@ type Adminer interface {
 	SetPluginGlobalDisabled(baseURL, token, name string, disabled bool) (int64, error)
 	Audits(baseURL, token string, page, pageSize int) (*AdminAuditPage, error)
 	Announce(baseURL, token, content string) (*AnnounceResult, error)
+	// Settings 站点设置：响应与 patch 均为透传 map（内核不枚举目标服务的配置分组）。
+	// 目标服务负责敏感字段 hasXxx 遮蔽与密钥留空不修改的语义。
+	Settings(baseURL, token string) (map[string]any, error)
+	SaveSettings(baseURL, token string, patch map[string]any) (map[string]any, error)
 }
 
 // Registry 服务类型 → adapter 的注册表（更新与管理双能力；组合根是唯一装配点）。

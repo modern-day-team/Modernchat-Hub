@@ -100,6 +100,8 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	admin.POST("/services/:id/admin/plugins/global-disable", instH.AdminSetPluginGlobalDisabled) // 全局下架/恢复
 	admin.GET("/services/:id/admin/audits", instH.AdminAudits)                                   // 审计日志
 	admin.POST("/services/:id/admin/announce", instH.AdminAnnounce)                              // 全站公告
+	admin.GET("/services/:id/admin/settings", instH.AdminSettings)                               // 站点设置读
+	admin.PUT("/services/:id/admin/settings", instH.AdminSaveSettings)                           // 站点设置写
 
 	return r
 }

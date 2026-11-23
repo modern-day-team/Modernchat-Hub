@@ -169,5 +169,11 @@ export default {
     announceRequired: '请输入公告内容',
     announceDone: '公告已发送，接收 {count} 人',
     send: '发送公告',
+    settings: '站点设置',
+    settingsHint: '以 JSON 编辑目标服务的分组配置；只提交需要修改的分组，未改动的分组可整段删除。',
+    settingsSecretHint: '带 hasXxx 的字段表示密钥已配置；留空或不提交密钥字段即保持不变，明文密钥不会从目标端返回。',
+    settingsInvalid: 'JSON 格式不合法，请检查后重试',
+    settingsSave: '保存设置',
+    settingsDone: '站点设置已保存',
   },
 }

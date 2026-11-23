@@ -82,4 +82,7 @@ export const servicesApi = {
     http.get<TargetAdminAuditPage>(`/services/${id}/admin/audits?page=${page}&pageSize=${pageSize}`),
   adminAnnounce: (id: number, content: string) =>
     http.post<AnnounceResult>(`/services/${id}/admin/announce`, { content }),
+  adminSettings: (id: number) => http.get<Record<string, unknown>>(`/services/${id}/admin/settings`),
+  adminSaveSettings: (id: number, patch: Record<string, unknown>) =>
+    http.put<Record<string, unknown>>(`/services/${id}/admin/settings`, patch),
 }

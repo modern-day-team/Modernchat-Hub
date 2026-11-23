@@ -26,12 +26,16 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:visible': [value: boolean] }>()
 const { t } = useI18n()
 
-const tab = ref<'plugins' | 'announce' | 'audits'>('plugins')
+const tab = ref<'plugins' | 'announce' | 'audits' | 'settings'>('plugins')
 const loading = ref(false)
 const plugins = ref<TargetAdminPlugin[]>([])
 const audits = ref<TargetAdminAudit[]>([])
 const announceContent = ref('')
 const announcing = ref(false)
+const settingsText = ref('')
+const savingSettings = ref(false)
+/** 目标端已对密钥类字段做 hasXxx 遮蔽；留空的密钥字段保存时会被目标端忽略 */
+const settingsHasSecrets = ref(false)
 
 const pluginPage = ref(1)
 const auditPage = ref(1)
@@ -53,12 +57,17 @@ async function reload() {
   if (!props.instance) return
   loading.value = true
   try {
-    const [p, a] = await Promise.all([
+    const [p, a, s] = await Promise.all([
       servicesApi.adminPlugins(props.instance.id, pluginPage.value, pageSize),
       servicesApi.adminAudits(props.instance.id, auditPage.value, pageSize),
+      servicesApi.adminSettings(props.instance.id),
     ])
     plugins.value = p.plugins ?? []
     audits.value = a.audits ?? []
+    settingsText.value = JSON.stringify(s, null, 2)
+    settingsHasSecrets.value = Object.values(s).some(
+      (g) => !!g && typeof g === 'object' && Object.keys(g as object).some((k) => k.startsWith('has')),
+    )
   } catch (e) {
     MessagePlugin.error(e instanceof ApiError ? e.message : t('svc.failed'))
   } finally {
@@ -100,6 +109,29 @@ async function sendAnnounce() {
   }
 }
 
+async function saveSettings() {
+  if (!props.instance || savingSettings.value) return
+  let patch: Record<string, unknown>
+  try {
+    patch = JSON.parse(settingsText.value) as Record<string, unknown>
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('not object')
+  } catch {
+    MessagePlugin.warning(t('ops.settingsInvalid'))
+    return
+  }
+  savingSettings.value = true
+  try {
+    const r = await servicesApi.adminSaveSettings(props.instance.id, patch)
+    MessagePlugin.success(t('ops.settingsDone'))
+    settingsText.value = JSON.stringify(r, null, 2)
+    await reload()
+  } catch (e) {
+    MessagePlugin.error(e instanceof ApiError ? e.message : t('svc.failed'))
+  } finally {
+    savingSettings.value = false
+  }
+}
+
 function close() {
   emit('update:visible', false)
 }
@@ -118,6 +150,7 @@ function close() {
         <UiButton variant="text" size="small" @click="tab = 'plugins'">{{ t('ops.plugins') }}</UiButton>
         <UiButton variant="text" size="small" @click="tab = 'announce'">{{ t('ops.announce') }}</UiButton>
         <UiButton variant="text" size="small" @click="tab = 'audits'">{{ t('ops.audits') }}</UiButton>
+        <UiButton variant="text" size="small" @click="tab = 'settings'">{{ t('ops.settings') }}</UiButton>
         <UiButton variant="text" size="small" :loading="loading" @click="reload">{{ t('common.refresh') }}</UiButton>
       </div>
 
@@ -152,7 +185,7 @@ function close() {
         </div>
       </div>
 
-      <div v-else class="ops__panel">
+      <div v-else-if="tab === 'audits'" class="ops__panel">
         <p v-if="!audits.length" class="ops__empty">{{ t('ops.empty') }}</p>
         <div v-for="a in audits" :key="a.id" class="ops__row">
           <div>
@@ -162,6 +195,17 @@ function close() {
             </span>
           </div>
           <span class="ops__detail">{{ a.detail }}</span>
+        </div>
+      </div>
+
+      <div v-else class="ops__panel">
+        <p class="ops__hint">{{ t('ops.settingsHint') }}</p>
+        <p v-if="settingsHasSecrets" class="ops__hint">{{ t('ops.settingsSecretHint') }}</p>
+        <textarea v-model="settingsText" class="ops__textarea ops__textarea--json" rows="14" spellcheck="false" />
+        <div class="ops__actions">
+          <UiButton theme="primary" :loading="savingSettings" @click="saveSettings">
+            {{ t('ops.settingsSave') }}
+          </UiButton>
         </div>
       </div>
     </div>
@@ -221,6 +265,12 @@ function close() {
   font-family: inherit;
   font-size: 13px;
   resize: vertical;
+}
+
+.ops__textarea--json {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .ops__actions {

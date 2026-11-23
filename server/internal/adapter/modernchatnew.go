@@ -328,3 +328,27 @@ func (a *ModernchatNew) Announce(baseURL, token, content string) (*AnnounceResul
 	}
 	return &r, nil
 }
+
+// Settings 实现 Adminer：目标站点设置读取（目标已对密钥类字段做 hasXxx 遮蔽）。
+func (a *ModernchatNew) Settings(baseURL, token string) (map[string]any, error) {
+	var r map[string]any
+	if err := requestJSON(a.http, http.MethodGet, joinURL(baseURL, "/api/admin/settings"), token, &r); err != nil {
+		return nil, err
+	}
+	if r == nil {
+		r = map[string]any{}
+	}
+	return r, nil
+}
+
+// SaveSettings 实现 Adminer：写入站点设置（patch 原样透传，密钥留空=不修改由目标端保证）。
+func (a *ModernchatNew) SaveSettings(baseURL, token string, patch map[string]any) (map[string]any, error) {
+	var r map[string]any
+	if err := requestJSONBody(a.http, http.MethodPut, joinURL(baseURL, "/api/admin/settings"), token, patch, &r); err != nil {
+		return nil, err
+	}
+	if r == nil {
+		r = map[string]any{}
+	}
+	return r, nil
+}

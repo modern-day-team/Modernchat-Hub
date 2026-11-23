@@ -638,3 +638,26 @@ func (s *InstanceService) AdminAnnounce(id uint, content string) (*adapter.Annou
 	slog.Info("管理操作：全站公告", "instance", inst.Name, "recipients", res.Recipients)
 	return res, nil
 }
+
+// AdminSettings 目标站点设置读取（敏感字段由目标端遮蔽为 hasXxx）。
+func (s *InstanceService) AdminSettings(id uint) (map[string]any, error) {
+	inst, a, token, err := s.adminContext(id)
+	if err != nil {
+		return nil, err
+	}
+	return a.Settings(inst.BaseURL, token)
+}
+
+// AdminSaveSettings 写入目标站点设置（patch 透传；不记日志以免泄漏密钥类字段）。
+func (s *InstanceService) AdminSaveSettings(id uint, patch map[string]any) (map[string]any, error) {
+	inst, a, token, err := s.adminContext(id)
+	if err != nil {
+		return nil, err
+	}
+	res, err := a.SaveSettings(inst.BaseURL, token, patch)
+	if err != nil {
+		return nil, err
+	}
+	slog.Info("管理操作：保存站点设置", "instance", inst.Name, "groups", len(patch))
+	return res, nil
+}
