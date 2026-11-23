@@ -11,6 +11,7 @@ import UiDialog from '@/components/ui/UiDialog.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiTag from '@/components/ui/UiTag.vue'
 import ServiceAdminDialog from '@/components/ServiceAdminDialog.vue'
+import ServiceOpsDialog from '@/components/ServiceOpsDialog.vue'
 import { useInstancesStore } from '@/stores/instances'
 import type { ServiceInstance, UpdateCheck, UpdateStatus } from '@/types'
 
@@ -224,6 +225,7 @@ function modeText(mode: string) {
 
 // ── 远程管理（统一管理后台，kind 有对应 adminer 时可用） ──
 const adminTarget = ref<ServiceInstance | null>(null)
+const opsTarget = ref<ServiceInstance | null>(null)
 </script>
 
 <template>
@@ -290,6 +292,15 @@ const adminTarget = ref<ServiceInstance | null>(null)
                 @click="adminTarget = inst"
               >
                 {{ t('svc.rowAdmin') }}
+              </UiButton>
+              <UiButton
+                v-if="inst.kind === 'modernchat-new'"
+                variant="text"
+                theme="primary"
+                size="small"
+                @click="opsTarget = inst"
+              >
+                {{ t('svc.rowOps') }}
               </UiButton>
               <UiButton variant="text" size="small" @click="openEdit(inst)">{{ t('svc.rowEdit') }}</UiButton>
               <UiButton variant="text" theme="danger" size="small" @click="deleteTarget = inst">
@@ -427,6 +438,7 @@ const adminTarget = ref<ServiceInstance | null>(null)
 
     <!-- 远程管理（统一管理后台：代理目标服务站长 API） -->
     <ServiceAdminDialog :visible="adminTarget !== null" :instance="adminTarget" @update:visible="(v: boolean) => { if (!v) adminTarget = null }" />
+    <ServiceOpsDialog :visible="opsTarget !== null" :instance="opsTarget" @update:visible="(v: boolean) => { if (!v) opsTarget = null }" />
   </div>
 </template>
 

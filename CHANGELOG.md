@@ -1,5 +1,12 @@
 # Changelog
 
+## 未发布
+
+- feat(adapter)：`Adminer` 窄接口扩展插件、审计、公告能力——`AdminPluginPage` / `AdminAuditPage` / `AnnounceResult` 归一化结构；`modernchatnew.go` 代理主仓库 `GET /api/admin/plugins`、`POST /api/admin/plugins/global-disable`、`GET /api/admin/audits`、`POST /api/admin/announce`（空集归一为 `[]`，错误沿用 `decodeResponse` 语义映射）
+- feat(server)：四项管理编排进 `InstanceService`（复用 `adminContext` 取实例→解析 adapter→解密凭据；日志只记实例名与动作，公告正文不进日志）；REST 端点 `GET /api/v1/services/:id/admin/{plugins,audits}`、`POST .../admin/plugins/global-disable`、`POST .../admin/announce`（公告正文 1–1000 字校验）
+- feat(web)：服务行新增「运营」入口（kind=modernchat-new）——运营对话框三个页签：插件聚合列表 + 全局下架/恢复、全站公告发送、审计日志分页；新增 `ops.*` 中英文案
+- 验证：`go build` / `go vet` / `gofmt` / `go test ./...` 全绿；`npm run build` 通过
+
 ## 0.5.0（2026-11-21）
 
 - feat(server)：认证安全加固（router 遗留 TODO 清零）——**IP 级限流**：内存令牌桶中间件（`golang.org/x/time/rate`），注册/登录每 IP 每路由 10 次/分，超限 429「操作过于频繁，请稍后再试」；惰性清理防内存膨胀

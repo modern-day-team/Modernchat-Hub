@@ -533,6 +533,26 @@ func (a *stubAdminer) ResetPassword(baseURL, token string, userID uint) (string,
 	return a.newPassword, a.err
 }
 
+func (a *stubAdminer) Plugins(baseURL, token string, _, _ int) (*adapter.AdminPluginPage, error) {
+	a.gotBase, a.gotToken = baseURL, token
+	return &adapter.AdminPluginPage{Plugins: []adapter.AdminPlugin{}}, a.err
+}
+
+func (a *stubAdminer) SetPluginGlobalDisabled(baseURL, token, _ string, _ bool) (int64, error) {
+	a.gotBase, a.gotToken = baseURL, token
+	return 1, a.err
+}
+
+func (a *stubAdminer) Audits(baseURL, token string, _, _ int) (*adapter.AdminAuditPage, error) {
+	a.gotBase, a.gotToken = baseURL, token
+	return &adapter.AdminAuditPage{Audits: []adapter.AdminAudit{}}, a.err
+}
+
+func (a *stubAdminer) Announce(baseURL, token, _ string) (*adapter.AnnounceResult, error) {
+	a.gotBase, a.gotToken = baseURL, token
+	return &adapter.AnnounceResult{OK: true}, a.err
+}
+
 // 编译期断言：假管理 adapter 满足窄接口。
 var _ adapter.Adminer = (*stubAdminer)(nil)
 

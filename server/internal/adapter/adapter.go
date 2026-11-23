@@ -79,6 +79,53 @@ type AdminUserPage struct {
 	PageSize int         `json:"pageSize"`
 }
 
+// AdminPlugin 目标服务已安装插件的聚合行（按 name 聚合）。
+type AdminPlugin struct {
+	Name           string `json:"name"`
+	Version        string `json:"version"`
+	InstallCount   int64  `json:"installCount"`
+	EnabledCount   int64  `json:"enabledCount"`
+	GlobalDisabled bool   `json:"globalDisabled"`
+	CreatedAt      string `json:"createdAt,omitempty"`
+}
+
+// AdminPluginPage 目标服务插件分页。
+type AdminPluginPage struct {
+	Plugins  []AdminPlugin `json:"plugins"`
+	Total    int64         `json:"total"`
+	Page     int           `json:"page"`
+	PageSize int           `json:"pageSize"`
+}
+
+// AdminAudit 目标服务审计日志行。
+type AdminAudit struct {
+	ID         uint   `json:"id"`
+	AdminID    uint   `json:"adminId"`
+	Action     string `json:"action"`
+	TargetType string `json:"targetType,omitempty"`
+	TargetID   uint   `json:"targetId,omitempty"`
+	TargetName string `json:"targetName,omitempty"`
+	Detail     string `json:"detail,omitempty"`
+	IP         string `json:"ip,omitempty"`
+	CreatedAt  string `json:"createdAt,omitempty"`
+}
+
+// AdminAuditPage 目标服务审计分页。
+type AdminAuditPage struct {
+	Audits   []AdminAudit `json:"audits"`
+	Total    int64        `json:"total"`
+	Page     int          `json:"page"`
+	PageSize int          `json:"pageSize"`
+}
+
+// AnnounceResult 目标服务全站公告发送结果。
+type AnnounceResult struct {
+	OK         bool  `json:"ok"`
+	ConvID     uint  `json:"convId,omitempty"`
+	MessageID  uint  `json:"messageId,omitempty"`
+	Recipients int64 `json:"recipients"`
+}
+
 // Adminer 管理操作窄接口：把目标服务的站长后台能力代理到 Hub（统一管理后台）。
 // token 是已解密的目标服务管理员凭据；adapter 只做协议翻译，不写业务规则。
 type Adminer interface {
@@ -89,6 +136,10 @@ type Adminer interface {
 	Unban(baseURL, token string, userID uint) error
 	Kick(baseURL, token string, userID uint) (bool, error)
 	ResetPassword(baseURL, token string, userID uint) (string, error)
+	Plugins(baseURL, token string, page, pageSize int) (*AdminPluginPage, error)
+	SetPluginGlobalDisabled(baseURL, token, name string, disabled bool) (int64, error)
+	Audits(baseURL, token string, page, pageSize int) (*AdminAuditPage, error)
+	Announce(baseURL, token, content string) (*AnnounceResult, error)
 }
 
 // Registry 服务类型 → adapter 的注册表（更新与管理双能力；组合根是唯一装配点）。

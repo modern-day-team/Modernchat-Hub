@@ -4,6 +4,9 @@ import type {
   ServiceInstance,
   TargetAdminStats,
   TargetAdminUserPage,
+  TargetAdminPluginPage,
+  TargetAdminAuditPage,
+  AnnounceResult,
   UpdateCheck,
   UpdateStatus,
   User,
@@ -68,4 +71,15 @@ export const servicesApi = {
     http.post<{ ok: boolean; wasOnline: boolean }>(`/services/${id}/admin/users/${uid}/kick`),
   adminResetPassword: (id: number, uid: number) =>
     http.post<{ newPassword: string }>(`/services/${id}/admin/users/${uid}/reset-password`),
+  adminPlugins: (id: number, page: number, pageSize: number) =>
+    http.get<TargetAdminPluginPage>(`/services/${id}/admin/plugins?page=${page}&pageSize=${pageSize}`),
+  adminSetPlugin: (id: number, name: string, disabled: boolean) =>
+    http.post<{ ok: boolean; affected: number }>(`/services/${id}/admin/plugins/global-disable`, {
+      name,
+      disabled,
+    }),
+  adminAudits: (id: number, page: number, pageSize: number) =>
+    http.get<TargetAdminAuditPage>(`/services/${id}/admin/audits?page=${page}&pageSize=${pageSize}`),
+  adminAnnounce: (id: number, content: string) =>
+    http.post<AnnounceResult>(`/services/${id}/admin/announce`, { content }),
 }

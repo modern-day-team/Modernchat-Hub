@@ -96,6 +96,10 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	admin.POST("/services/:id/admin/users/:uid/unban", instH.AdminUnban)
 	admin.POST("/services/:id/admin/users/:uid/kick", instH.AdminKick)
 	admin.POST("/services/:id/admin/users/:uid/reset-password", instH.AdminResetPassword)
+	admin.GET("/services/:id/admin/plugins", instH.AdminPlugins)                                 // 插件聚合列表
+	admin.POST("/services/:id/admin/plugins/global-disable", instH.AdminSetPluginGlobalDisabled) // 全局下架/恢复
+	admin.GET("/services/:id/admin/audits", instH.AdminAudits)                                   // 审计日志
+	admin.POST("/services/:id/admin/announce", instH.AdminAnnounce)                              // 全站公告
 
 	return r
 }

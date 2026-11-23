@@ -252,3 +252,79 @@ func (a *ModernchatNew) ResetPassword(baseURL, token string, userID uint) (strin
 	}
 	return r.NewPassword, nil
 }
+
+// targetAdminPluginPage 主仓库 GET /api/admin/plugins 的响应形状（规格 §3.2）。
+type targetAdminPluginPage struct {
+	Plugins  []AdminPlugin `json:"plugins"`
+	Total    int64         `json:"total"`
+	Page     int           `json:"page"`
+	PageSize int           `json:"pageSize"`
+}
+
+// Plugins 实现 Adminer：目标插件聚合列表。
+func (a *ModernchatNew) Plugins(baseURL, token string, page, pageSize int) (*AdminPluginPage, error) {
+	q := url.Values{}
+	q.Set("page", strconv.Itoa(page))
+	q.Set("pageSize", strconv.Itoa(pageSize))
+	var r targetAdminPluginPage
+	if err := requestJSON(a.http, http.MethodGet, joinURL(baseURL, "/api/admin/plugins?"+q.Encode()), token, &r); err != nil {
+		return nil, err
+	}
+	if r.Plugins == nil {
+		r.Plugins = []AdminPlugin{}
+	}
+	return &AdminPluginPage{Plugins: r.Plugins, Total: r.Total, Page: r.Page, PageSize: r.PageSize}, nil
+}
+
+// SetPluginGlobalDisabled 实现 Adminer：站长全局下架 / 恢复某插件。
+func (a *ModernchatNew) SetPluginGlobalDisabled(baseURL, token, name string, disabled bool) (int64, error) {
+	var r struct {
+		OK       bool  `json:"ok"`
+		Affected int64 `json:"affected"`
+	}
+	err := requestJSONBody(a.http, http.MethodPost, joinURL(baseURL, "/api/admin/plugins/global-disable"), token,
+		map[string]any{"name": name, "disabled": disabled}, &r)
+	if err != nil {
+		return 0, err
+	}
+	if !r.OK {
+		return 0, errors.New("目标服务未确认插件下架操作")
+	}
+	return r.Affected, nil
+}
+
+// targetAdminAuditPage 主仓库 GET /api/admin/audits 的响应形状。
+type targetAdminAuditPage struct {
+	Audits   []AdminAudit `json:"audits"`
+	Total    int64        `json:"total"`
+	Page     int          `json:"page"`
+	PageSize int          `json:"pageSize"`
+}
+
+// Audits 实现 Adminer：目标审计日志分页。
+func (a *ModernchatNew) Audits(baseURL, token string, page, pageSize int) (*AdminAuditPage, error) {
+	q := url.Values{}
+	q.Set("page", strconv.Itoa(page))
+	q.Set("pageSize", strconv.Itoa(pageSize))
+	var r targetAdminAuditPage
+	if err := requestJSON(a.http, http.MethodGet, joinURL(baseURL, "/api/admin/audits?"+q.Encode()), token, &r); err != nil {
+		return nil, err
+	}
+	if r.Audits == nil {
+		r.Audits = []AdminAudit{}
+	}
+	return &AdminAuditPage{Audits: r.Audits, Total: r.Total, Page: r.Page, PageSize: r.PageSize}, nil
+}
+
+// Announce 实现 Adminer：向目标服务发送全站公告。
+func (a *ModernchatNew) Announce(baseURL, token, content string) (*AnnounceResult, error) {
+	var r AnnounceResult
+	if err := requestJSONBody(a.http, http.MethodPost, joinURL(baseURL, "/api/admin/announce"), token,
+		map[string]any{"content": content}, &r); err != nil {
+		return nil, err
+	}
+	if !r.OK {
+		return nil, errors.New("目标服务未确认公告发送")
+	}
+	return &r, nil
+}

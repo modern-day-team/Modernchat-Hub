@@ -40,6 +40,10 @@ type InstanceAdmin interface {
 	AdminUnban(id, targetUserID uint) error
 	AdminKick(id, targetUserID uint) (bool, error)
 	AdminResetPassword(id, targetUserID uint) (string, error)
+	AdminPlugins(id uint, page, pageSize int) (*adapter.AdminPluginPage, error)
+	AdminSetPluginGlobalDisabled(id uint, name string, disabled bool) (int64, error)
+	AdminAudits(id uint, page, pageSize int) (*adapter.AdminAuditPage, error)
+	AdminAnnounce(id uint, content string) (*adapter.AnnounceResult, error)
 }
 
 // InstanceHandler 服务实例端点（RESTful：/api/v1/services + update/admin 子资源）。
@@ -387,6 +391,84 @@ func (h *InstanceHandler) AdminResetPassword(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"newPassword": newPassword})
+}
+
+// AdminPlugins 目标服务插件聚合列表。
+func (h *InstanceHandler) AdminPlugins(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	page, pageSize := pageParams(c)
+	res, err := h.admins.AdminPlugins(id, page, pageSize)
+	if err != nil {
+		mapErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+// AdminSetPluginGlobalDisabled 全局下架 / 恢复目标插件。
+func (h *InstanceHandler) AdminSetPluginGlobalDisabled(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Name     string `json:"name" binding:"required"`
+		Disabled bool   `json:"disabled"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, http.StatusBadRequest, "参数不合法：name 必填")
+		return
+	}
+	affected, err := h.admins.AdminSetPluginGlobalDisabled(id, req.Name, req.Disabled)
+	if err != nil {
+		mapErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "affected": affected})
+}
+
+// AdminAudits 目标服务审计日志分页。
+func (h *InstanceHandler) AdminAudits(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	page, pageSize := pageParams(c)
+	res, err := h.admins.AdminAudits(id, page, pageSize)
+	if err != nil {
+		mapErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+// AdminAnnounce 向目标服务发送全站公告（正文 1–1000 字）。
+func (h *InstanceHandler) AdminAnnounce(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Content string `json:"content" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, http.StatusBadRequest, "参数不合法：content 必填")
+		return
+	}
+	content := strings.TrimSpace(req.Content)
+	if n := utf8.RuneCountInString(content); n < 1 || n > 1000 {
+		fail(c, http.StatusBadRequest, "参数不合法：公告须为 1–1000 字")
+		return
+	}
+	res, err := h.admins.AdminAnnounce(id, content)
+	if err != nil {
+		mapErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }
 
 // orTrue enabled 缺省 true。

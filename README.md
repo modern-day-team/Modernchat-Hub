@@ -92,6 +92,10 @@ web/
 | POST | `/api/v1/services/:id/admin/users/:uid/unban` | 解封 |
 | POST | `/api/v1/services/:id/admin/users/:uid/kick` | 强制下线（不封禁，返回 wasOnline） |
 | POST | `/api/v1/services/:id/admin/users/:uid/reset-password` | 目标端随机重置密码（一次性明文） |
+| GET | `/api/v1/services/:id/admin/plugins` | 目标插件聚合列表（`?page=&pageSize=`） |
+| POST | `/api/v1/services/:id/admin/plugins/global-disable` | 全局下架/恢复插件（`{name,disabled}` → `{ok,affected}`） |
+| GET | `/api/v1/services/:id/admin/audits` | 目标审计日志分页（`?page=&pageSize=`） |
+| POST | `/api/v1/services/:id/admin/announce` | 向目标服务发送全站公告（`{content}` 1–1000 字） |
 
 ## 约定
 

@@ -100,3 +100,47 @@ export interface TargetAdminUserPage {
   page: number
   pageSize: number
 }
+
+/** 目标服务插件聚合行 */
+export interface TargetAdminPlugin {
+  name: string
+  version: string
+  installCount: number
+  enabledCount: number
+  globalDisabled: boolean
+  createdAt?: string
+}
+
+export interface TargetAdminPluginPage {
+  plugins: TargetAdminPlugin[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+/** 目标服务审计行 */
+export interface TargetAdminAudit {
+  id: number
+  adminId: number
+  action: string
+  targetType?: string
+  targetId?: number
+  targetName?: string
+  detail?: string
+  ip?: string
+  createdAt?: string
+}
+
+export interface TargetAdminAuditPage {
+  audits: TargetAdminAudit[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface AnnounceResult {
+  ok: boolean
+  convId?: number
+  messageId?: number
+  recipients: number
+}

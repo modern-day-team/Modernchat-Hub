@@ -573,3 +573,68 @@ func (s *InstanceService) AdminResetPassword(id, targetUserID uint) (string, err
 	slog.Info("管理操作：重置密码", "instance", inst.Name, "targetUser", targetUserID)
 	return pwd, nil
 }
+
+// adminContext 管理编排公共前缀：取实例 → 解析 adapter → 解密凭据。
+// 返回 nil 时错误已由调用方感知；仅内部复用，不改对外方法签名。
+func (s *InstanceService) adminContext(id uint) (*model.ServiceInstance, adapter.Adminer, string, error) {
+	inst, err := s.getInstance(id)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	a, err := s.resolveAdminer(inst)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	token, err := s.credential(inst)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	return inst, a, token, nil
+}
+
+// AdminPlugins 目标服务插件聚合列表。
+func (s *InstanceService) AdminPlugins(id uint, page, pageSize int) (*adapter.AdminPluginPage, error) {
+	inst, a, token, err := s.adminContext(id)
+	if err != nil {
+		return nil, err
+	}
+	return a.Plugins(inst.BaseURL, token, page, pageSize)
+}
+
+// AdminSetPluginGlobalDisabled 站长全局下架 / 恢复插件。
+func (s *InstanceService) AdminSetPluginGlobalDisabled(id uint, name string, disabled bool) (int64, error) {
+	inst, a, token, err := s.adminContext(id)
+	if err != nil {
+		return 0, err
+	}
+	affected, err := a.SetPluginGlobalDisabled(inst.BaseURL, token, name, disabled)
+	if err != nil {
+		return 0, err
+	}
+	slog.Info("管理操作：插件全局状态", "instance", inst.Name, "plugin", name, "disabled", disabled, "affected", affected)
+	return affected, nil
+}
+
+// AdminAudits 目标服务审计日志分页。
+func (s *InstanceService) AdminAudits(id uint, page, pageSize int) (*adapter.AdminAuditPage, error) {
+	inst, a, token, err := s.adminContext(id)
+	if err != nil {
+		return nil, err
+	}
+	return a.Audits(inst.BaseURL, token, page, pageSize)
+}
+
+// AdminAnnounce 向目标服务发送全站公告。
+func (s *InstanceService) AdminAnnounce(id uint, content string) (*adapter.AnnounceResult, error) {
+	inst, a, token, err := s.adminContext(id)
+	if err != nil {
+		return nil, err
+	}
+	res, err := a.Announce(inst.BaseURL, token, content)
+	if err != nil {
+		return nil, err
+	}
+	// 公告正文不进日志（可能含运营敏感信息），只记实例与接收人数
+	slog.Info("管理操作：全站公告", "instance", inst.Name, "recipients", res.Recipients)
+	return res, nil
+}
