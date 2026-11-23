@@ -62,6 +62,8 @@ export default {
     tokenNewHint: 'Stored encrypted; never sent back in plaintext',
     healthPath: 'Health path',
     healthPathPlaceholder: '/api/health',
+    versionPath: 'Version path',
+    versionPathPlaceholder: '/api/version (SSO: /api/v1/version)',
     enabled: 'Enabled',
     note: 'Note',
     notePlaceholder: 'Purpose, owner, etc. (optional)',

@@ -20,7 +20,10 @@ type ServiceInstance struct {
 	TokenCiphertext string `gorm:"size:255" json:"-"`                    // SecretBox 密文，永不下发
 	HasToken        bool   `gorm:"-" json:"hasToken"`                    // 是否已配置凭据（service 层填充）
 	HealthPath      string `gorm:"size:100;default:/api/health" json:"healthPath"`
-	Enabled         bool   `gorm:"default:true" json:"enabled"`
+	// VersionPath 版本探测路径：主仓库 /api/version，SSO /api/v1/version。
+	// 默认 /api/version；留空按默认处理（兼容存量行）。
+	VersionPath string `gorm:"size:100;default:/api/version" json:"versionPath"`
+	Enabled     bool   `gorm:"default:true" json:"enabled"`
 
 	LastCheckAt *time.Time `json:"lastCheckAt,omitempty"`
 	LastStatus  string     `gorm:"size:10;default:unknown" json:"lastStatus"` // ok | fail | unknown

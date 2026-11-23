@@ -17,9 +17,9 @@ import (
 // InstanceManage 消费方定义的窄接口（由 service.InstanceService 实现）。
 type InstanceManage interface {
 	List() ([]model.ServiceInstance, error)
-	Create(kind, name, baseURL, authType, token, healthPath string, enabled bool, note string) (*model.ServiceInstance, error)
+	Create(kind, name, baseURL, authType, token, healthPath, versionPath string, enabled bool, note string) (*model.ServiceInstance, error)
 	Get(id uint) (*model.ServiceInstance, error)
-	Update(id uint, kind, name, baseURL, authType, token, healthPath string, enabled bool, note string) (*model.ServiceInstance, error)
+	Update(id uint, kind, name, baseURL, authType, token, healthPath, versionPath string, enabled bool, note string) (*model.ServiceInstance, error)
 	Delete(id uint) error
 	Probe(id uint) (*model.ServiceInstance, error)
 	ProbeAll() ([]service.ProbeAllResult, error)
@@ -55,14 +55,15 @@ func NewInstanceHandler(instances InstanceManage, updates InstanceUpdater, admin
 }
 
 type upsertReq struct {
-	Kind       string `json:"kind"`
-	Name       string `json:"name" binding:"required"`
-	BaseURL    string `json:"baseUrl" binding:"required"`
-	AuthType   string `json:"authType"`
-	Token      string `json:"token"`
-	HealthPath string `json:"healthPath"`
-	Enabled    *bool  `json:"enabled"` // 缺省 true
-	Note       string `json:"note"`
+	Kind        string `json:"kind"`
+	Name        string `json:"name" binding:"required"`
+	BaseURL     string `json:"baseUrl" binding:"required"`
+	AuthType    string `json:"authType"`
+	Token       string `json:"token"`
+	HealthPath  string `json:"healthPath"`
+	VersionPath string `json:"versionPath"`
+	Enabled     *bool  `json:"enabled"` // 缺省 true
+	Note        string `json:"note"`
 }
 
 // List 服务实例列表。
@@ -85,7 +86,7 @@ func (h *InstanceHandler) Create(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "参数不合法：name 与 baseUrl 必填")
 		return
 	}
-	inst, err := h.instances.Create(req.Kind, req.Name, req.BaseURL, orNone(req.AuthType), req.Token, req.HealthPath, orTrue(req.Enabled), req.Note)
+	inst, err := h.instances.Create(req.Kind, req.Name, req.BaseURL, orNone(req.AuthType), req.Token, req.HealthPath, req.VersionPath, orTrue(req.Enabled), req.Note)
 	if err != nil {
 		mapErr(c, err)
 		return
@@ -118,7 +119,7 @@ func (h *InstanceHandler) Update(c *gin.Context) {
 		fail(c, http.StatusBadRequest, "参数不合法：name 与 baseUrl 必填")
 		return
 	}
-	inst, err := h.instances.Update(id, req.Kind, req.Name, req.BaseURL, orNone(req.AuthType), req.Token, req.HealthPath, orTrue(req.Enabled), req.Note)
+	inst, err := h.instances.Update(id, req.Kind, req.Name, req.BaseURL, orNone(req.AuthType), req.Token, req.HealthPath, req.VersionPath, orTrue(req.Enabled), req.Note)
 	if err != nil {
 		mapErr(c, err)
 		return

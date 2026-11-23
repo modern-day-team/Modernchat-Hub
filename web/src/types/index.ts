@@ -22,6 +22,7 @@ export interface ServiceInstance {
   /** 是否已配置访问凭据（凭据本体永不下发） */
   hasToken: boolean
   healthPath: string
+  versionPath: string
   enabled: boolean
   lastCheckAt?: string
   lastStatus: 'ok' | 'fail' | 'unknown'

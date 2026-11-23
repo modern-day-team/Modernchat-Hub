@@ -62,6 +62,8 @@ export default {
     tokenNewHint: '凭据加密落库，永不明文下发',
     healthPath: '健康路径',
     healthPathPlaceholder: '/api/health',
+    versionPath: '版本探测路径',
+    versionPathPlaceholder: '/api/version（SSO 为 /api/v1/version）',
     enabled: '启用',
     note: '备注',
     notePlaceholder: '用途、负责人等（可选）',

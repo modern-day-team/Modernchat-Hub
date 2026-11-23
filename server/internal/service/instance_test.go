@@ -118,19 +118,28 @@ func TestCreateValidation(t *testing.T) {
 		create  func() error
 		wantErr error
 	}{
-		{"空名称", func() error { _, err := svc.Create("", "  ", "http://x.local", "none", "", "", true, ""); return err }, apperr.ErrInvalidInput},
+		{"空名称", func() error {
+			_, err := svc.Create("", "  ", "http://x.local", "none", "", "", "", true, "")
+			return err
+		}, apperr.ErrInvalidInput},
 		{"超长名称", func() error {
-			_, err := svc.Create("", strings.Repeat("名", 31), "http://x.local", "none", "", "", true, "")
+			_, err := svc.Create("", strings.Repeat("名", 31), "http://x.local", "none", "", "", "", true, "")
 			return err
 		}, apperr.ErrInvalidInput},
 		{"超长 kind", func() error {
-			_, err := svc.Create(strings.Repeat("k", 31), "a", "http://x.local", "none", "", "", true, "")
+			_, err := svc.Create(strings.Repeat("k", 31), "a", "http://x.local", "none", "", "", "", true, "")
 			return err
 		}, apperr.ErrInvalidInput},
-		{"非 http 协议", func() error { _, err := svc.Create("", "a", "ftp://x.local", "none", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
-		{"缺主机名", func() error { _, err := svc.Create("", "a", "http://", "none", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
-		{"未知鉴权方式", func() error { _, err := svc.Create("", "a", "http://x.local", "basic", "", "", true, ""); return err }, apperr.ErrAuthType},
-		{"bearer 缺凭据", func() error { _, err := svc.Create("", "a", "http://x.local", "bearer", "", "", true, ""); return err }, apperr.ErrInvalidInput},
+		{"非 http 协议", func() error { _, err := svc.Create("", "a", "ftp://x.local", "none", "", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
+		{"缺主机名", func() error { _, err := svc.Create("", "a", "http://", "none", "", "", "", true, ""); return err }, apperr.ErrBadBaseURL},
+		{"未知鉴权方式", func() error {
+			_, err := svc.Create("", "a", "http://x.local", "basic", "", "", "", true, "")
+			return err
+		}, apperr.ErrAuthType},
+		{"bearer 缺凭据", func() error {
+			_, err := svc.Create("", "a", "http://x.local", "bearer", "", "", "", true, "")
+			return err
+		}, apperr.ErrInvalidInput},
 	}
 	for _, tc := range cases {
 		if err := tc.create(); !errors.Is(err, tc.wantErr) {
@@ -142,7 +151,7 @@ func TestCreateValidation(t *testing.T) {
 func TestCreateDefaultsAndUnique(t *testing.T) {
 	svc, _ := newTestService()
 
-	inst, err := svc.Create("", " hub-self ", "http://127.0.0.1:8091/", "none", "", "healthz", false, " 说明 ")
+	inst, err := svc.Create("", " hub-self ", "http://127.0.0.1:8091/", "none", "", "healthz", "", false, " 说明 ")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
@@ -163,7 +172,7 @@ func TestCreateDefaultsAndUnique(t *testing.T) {
 	}
 
 	// 空健康路径 → 默认 /api/health；kind 空值同上
-	inst2, err := svc.Create("", "other", "http://127.0.0.1:8092", "none", "", "", true, "")
+	inst2, err := svc.Create("", "other", "http://127.0.0.1:8092", "none", "", "", "", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
@@ -172,7 +181,7 @@ func TestCreateDefaultsAndUnique(t *testing.T) {
 	}
 
 	// 重名 → 409
-	if _, err := svc.Create("", "hub-self", "http://127.0.0.1:8093", "none", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
+	if _, err := svc.Create("", "hub-self", "http://127.0.0.1:8093", "none", "", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
 		t.Fatalf("重名应返回 ErrNameTaken: %v", err)
 	}
 }
@@ -181,7 +190,7 @@ func TestCreateBearerSealsToken(t *testing.T) {
 	svc, _ := newTestService()
 	box := crypto.NewBox("", jwtSecretForTest)
 
-	inst, err := svc.Create("", "authed", "http://10.0.0.1", "bearer", "plain-token", "", true, "")
+	inst, err := svc.Create("", "authed", "http://10.0.0.1", "bearer", "plain-token", "", "", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
@@ -195,12 +204,12 @@ func TestCreateBearerSealsToken(t *testing.T) {
 
 func TestUpdateKeepsTokenWhenEmpty(t *testing.T) {
 	svc, _ := newTestService()
-	inst, err := svc.Create("", "a", "http://10.0.0.1", "bearer", "old-token", "", true, "")
+	inst, err := svc.Create("", "a", "http://10.0.0.1", "bearer", "old-token", "", "", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
 
-	updated, err := svc.Update(inst.ID, "", "a2", "http://10.0.0.2", "bearer", "", "/api/health", false, "改备注")
+	updated, err := svc.Update(inst.ID, "", "a2", "http://10.0.0.2", "bearer", "", "/api/health", "", false, "改备注")
 	if err != nil {
 		t.Fatalf("Update() 出错: %v", err)
 	}
@@ -212,10 +221,10 @@ func TestUpdateKeepsTokenWhenEmpty(t *testing.T) {
 	}
 
 	// 改成已有名称 → 409
-	if _, err := svc.Create("", "b", "http://10.0.0.3", "none", "", "", true, ""); err != nil {
+	if _, err := svc.Create("", "b", "http://10.0.0.3", "none", "", "", "", true, ""); err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
-	if _, err := svc.Update(inst.ID, "", "b", "http://10.0.0.2", "none", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
+	if _, err := svc.Update(inst.ID, "", "b", "http://10.0.0.2", "none", "", "", "", true, ""); !errors.Is(err, apperr.ErrNameTaken) {
 		t.Fatalf("改成重名应返回 ErrNameTaken: %v", err)
 	}
 }
@@ -247,7 +256,7 @@ func TestProbeAgainstFakeServer(t *testing.T) {
 	defer ts.Close()
 
 	svc, repo := newTestService()
-	inst, err := svc.Create("", "fake", ts.URL, "none", "", "/healthz", true, "")
+	inst, err := svc.Create("", "fake", ts.URL, "none", "", "/healthz", "", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
@@ -289,10 +298,10 @@ func TestProbeAllBoundedConcurrent(t *testing.T) {
 	defer tsBad.Close()
 
 	svc, repo := newTestService()
-	if _, err := svc.Create("", "ok1", ts.URL, "none", "", "/api/health", true, ""); err != nil {
+	if _, err := svc.Create("", "ok1", ts.URL, "none", "", "/api/health", "", true, ""); err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
-	if _, err := svc.Create("", "bad1", tsBad.URL, "none", "", "/api/health", true, ""); err != nil {
+	if _, err := svc.Create("", "bad1", tsBad.URL, "none", "", "/api/health", "", true, ""); err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
 
@@ -330,7 +339,7 @@ func TestProbeFailuresAreData(t *testing.T) {
 	defer ts.Close()
 
 	svc, _ := newTestService()
-	inst, _ := svc.Create("", "bad", ts.URL, "none", "", "/api/health", true, "")
+	inst, _ := svc.Create("", "bad", ts.URL, "none", "", "/api/health", "", true, "")
 	got, err := svc.Probe(inst.ID)
 	if err != nil {
 		t.Fatalf("探测失败应作为数据返回，而不是错误: %v", err)
@@ -340,7 +349,7 @@ func TestProbeFailuresAreData(t *testing.T) {
 	}
 
 	// 连不上 → fail
-	inst2, _ := svc.Create("", "dead", "http://127.0.0.1:1", "none", "", "/healthz", true, "")
+	inst2, _ := svc.Create("", "dead", "http://127.0.0.1:1", "none", "", "/healthz", "", true, "")
 	got2, err := svc.Probe(inst2.ID)
 	if err != nil {
 		t.Fatalf("探测失败应作为数据返回，而不是错误: %v", err)
@@ -355,7 +364,7 @@ func TestProbeFailuresAreData(t *testing.T) {
 	}))
 	defer tsOK.Close()
 	svc2, _ := newTestService()
-	inst3, _ := svc2.Create("", "ok-only", tsOK.URL, "none", "", "/api/health", true, "")
+	inst3, _ := svc2.Create("", "ok-only", tsOK.URL, "none", "", "/api/health", "", true, "")
 	got3, err := svc2.Probe(inst3.ID)
 	if err != nil || got3.LastStatus != "ok" {
 		t.Fatalf("健康 ok 应整体 ok: status=%q err=%v", got3.LastStatus, err)
@@ -403,7 +412,7 @@ func TestUpdateOrchestration(t *testing.T) {
 	svc, _ := newTestServiceWith(reg)
 
 	// bearer 实例：adapter 应收到解密后的明文凭据
-	inst, err := svc.Create("modernchat-new", "mcn", "http://10.0.0.9", "bearer", "target-admin-token", "", true, "")
+	inst, err := svc.Create("modernchat-new", "mcn", "http://10.0.0.9", "bearer", "target-admin-token", "", "", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
@@ -446,7 +455,7 @@ func TestUpdateUnknownKind(t *testing.T) {
 	svc, _ := newTestServiceWith(reg)
 
 	// generic：无 adapter，更新操作一律不支持
-	g, _ := svc.Create("", "generic-inst", "http://10.0.0.1", "none", "", "", true, "")
+	g, _ := svc.Create("", "generic-inst", "http://10.0.0.1", "none", "", "", "", true, "")
 	if _, err := svc.UpdateCheck(g.ID); !errors.Is(err, apperr.ErrKindUnknown) {
 		t.Fatalf("generic 应返回 ErrKindUnknown: %v", err)
 	}
@@ -455,14 +464,14 @@ func TestUpdateUnknownKind(t *testing.T) {
 	}
 
 	// 未注册的其他 kind 同样不支持
-	o, _ := svc.Create("some-other", "other-inst", "http://10.0.0.2", "none", "", "", true, "")
+	o, _ := svc.Create("some-other", "other-inst", "http://10.0.0.2", "none", "", "", "", true, "")
 	if _, err := svc.UpdateStatus(o.ID); !errors.Is(err, apperr.ErrKindUnknown) {
 		t.Fatalf("未注册 kind 应返回 ErrKindUnknown: %v", err)
 	}
 
 	// 无注册表（nil）时同理
 	svc2, _ := newTestServiceWith(nil)
-	n, _ := svc2.Create("modernchat-new", "no-registry", "http://10.0.0.3", "none", "", "", true, "")
+	n, _ := svc2.Create("modernchat-new", "no-registry", "http://10.0.0.3", "none", "", "", "", true, "")
 	if err := svc2.UpdateStart(n.ID); !errors.Is(err, apperr.ErrKindUnknown) {
 		t.Fatalf("无注册表应返回 ErrKindUnknown: %v", err)
 	}
@@ -475,7 +484,7 @@ func TestUpdateAdapterErrorPassthrough(t *testing.T) {
 	reg.RegisterUpdater(stub)
 	svc, _ := newTestServiceWith(reg)
 
-	inst, _ := svc.Create("modernchat-new", "mcn", "http://10.0.0.9", "none", "", "", true, "")
+	inst, _ := svc.Create("modernchat-new", "mcn", "http://10.0.0.9", "none", "", "", "", true, "")
 	if _, err := svc.UpdateCheck(inst.ID); !errors.Is(err, apperr.ErrTargetAuth) {
 		t.Fatalf("adapter 错误应透传: %v", err)
 	}
@@ -541,7 +550,7 @@ func TestAdminOrchestration(t *testing.T) {
 	svc, _ := newTestServiceWith(reg)
 
 	// bearer 实例：adapter 应收到解密后的明文凭据
-	inst, err := svc.Create("modernchat-new", "admin-mcn", "http://10.0.0.8", "bearer", "target-admin-token", "", true, "")
+	inst, err := svc.Create("modernchat-new", "admin-mcn", "http://10.0.0.8", "bearer", "target-admin-token", "", "", true, "")
 	if err != nil {
 		t.Fatalf("Create() 出错: %v", err)
 	}
@@ -583,7 +592,7 @@ func TestAdminOrchestration(t *testing.T) {
 	}
 
 	// generic 实例：无 adminer
-	g, _ := svc.Create("", "generic-admin", "http://10.0.0.7", "none", "", "", true, "")
+	g, _ := svc.Create("", "generic-admin", "http://10.0.0.7", "none", "", "", "", true, "")
 	if _, err := svc.AdminStats(g.ID); !errors.Is(err, apperr.ErrKindUnknown) {
 		t.Fatalf("generic 应返回 ErrKindUnknown: %v", err)
 	}

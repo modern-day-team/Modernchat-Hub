@@ -20,8 +20,11 @@ import (
 	"github.com/modern-day-team/Modernchat-Hub/server/internal/model"
 )
 
-// DefaultHealthPath 未指定健康路径时的默认值（与主仓库一致）。
-const DefaultHealthPath = "/api/health"
+// 未指定探测路径时的默认值：主仓库 /api/health + /api/version；SSO /healthz + /api/v1/version。
+const (
+	DefaultHealthPath  = "/api/health"
+	DefaultVersionPath = "/api/version"
+)
 
 // AuthNone / AuthBearer 支持的鉴权方式。
 const (
@@ -55,25 +58,25 @@ func NewInstanceService(repo instanceRepo, box *crypto.Box, updates *adapter.Reg
 
 // validate 校验并归一（名称/kind 去空格、BaseURL 可解析、健康路径带前导斜杠）。
 // kind 是纯数据：空值归一为 generic，不枚举项目组服务类型（通用型设计原则）。
-func validate(kind, name, baseURL, authType, healthPath string) (string, string, string, string, string, error) {
+func validate(kind, name, baseURL, authType, healthPath, versionPath string) (string, string, string, string, string, string, error) {
 	kind = strings.TrimSpace(kind)
 	if kind == "" {
 		kind = model.KindGeneric
 	}
 	if utf8.RuneCountInString(kind) > 30 {
-		return "", "", "", "", "", apperr.ErrInvalidInput
+		return "", "", "", "", "", "", apperr.ErrInvalidInput
 	}
 	name = strings.TrimSpace(name)
 	if name == "" || utf8.RuneCountInString(name) > 30 {
-		return "", "", "", "", "", apperr.ErrInvalidInput
+		return "", "", "", "", "", "", apperr.ErrInvalidInput
 	}
 	baseURL = strings.TrimSpace(baseURL)
 	u, err := url.Parse(baseURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return "", "", "", "", "", apperr.ErrBadBaseURL
+		return "", "", "", "", "", "", apperr.ErrBadBaseURL
 	}
 	if authType != AuthNone && authType != AuthBearer {
-		return "", "", "", "", "", apperr.ErrAuthType
+		return "", "", "", "", "", "", apperr.ErrAuthType
 	}
 	healthPath = strings.TrimSpace(healthPath)
 	if healthPath == "" {
@@ -82,15 +85,22 @@ func validate(kind, name, baseURL, authType, healthPath string) (string, string,
 	if !strings.HasPrefix(healthPath, "/") {
 		healthPath = "/" + healthPath
 	}
+	versionPath = strings.TrimSpace(versionPath)
+	if versionPath == "" {
+		versionPath = DefaultVersionPath
+	}
+	if !strings.HasPrefix(versionPath, "/") {
+		versionPath = "/" + versionPath
+	}
 	// 长度上限与列宽（varchar 按「字符」计）对齐，超长先 400 而不是落库时 500：
-	// BaseURL 255 / HealthPath 100 / Note 255（note 由调用方归一后校验）
+	// BaseURL 255 / HealthPath 100 / VersionPath 100 / Note 255（note 由调用方归一后校验）
 	if utf8.RuneCountInString(baseURL) > 255 {
-		return "", "", "", "", "", apperr.ErrBadBaseURL
+		return "", "", "", "", "", "", apperr.ErrBadBaseURL
 	}
-	if utf8.RuneCountInString(healthPath) > 100 {
-		return "", "", "", "", "", apperr.ErrInvalidInput
+	if utf8.RuneCountInString(healthPath) > 100 || utf8.RuneCountInString(versionPath) > 100 {
+		return "", "", "", "", "", "", apperr.ErrInvalidInput
 	}
-	return kind, name, baseURL, authType, healthPath, nil
+	return kind, name, baseURL, authType, healthPath, versionPath, nil
 }
 
 // validateNote 备注长度校验（列宽 varchar(255)）。
@@ -103,8 +113,8 @@ func validateNote(note string) (string, error) {
 }
 
 // Create 注册服务实例：唯一性、URL/鉴权校验，bearer 凭据加密落库。
-func (s *InstanceService) Create(kind, name, baseURL, authType, token, healthPath string, enabled bool, note string) (*model.ServiceInstance, error) {
-	kind, name, baseURL, authType, healthPath, err := validate(kind, name, baseURL, authType, healthPath)
+func (s *InstanceService) Create(kind, name, baseURL, authType, token, healthPath, versionPath string, enabled bool, note string) (*model.ServiceInstance, error) {
+	kind, name, baseURL, authType, healthPath, versionPath, err := validate(kind, name, baseURL, authType, healthPath, versionPath)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +143,7 @@ func (s *InstanceService) Create(kind, name, baseURL, authType, token, healthPat
 		AuthType:        authType,
 		TokenCiphertext: cipher,
 		HealthPath:      healthPath,
+		VersionPath:     versionPath,
 		Enabled:         enabled,
 		Note:            note,
 		LastStatus:      "unknown",
@@ -149,12 +160,12 @@ func (s *InstanceService) Create(kind, name, baseURL, authType, token, healthPat
 }
 
 // Update 编辑实例：token 传空表示保持原凭据不变。
-func (s *InstanceService) Update(id uint, kind, name, baseURL, authType, token, healthPath string, enabled bool, note string) (*model.ServiceInstance, error) {
+func (s *InstanceService) Update(id uint, kind, name, baseURL, authType, token, healthPath, versionPath string, enabled bool, note string) (*model.ServiceInstance, error) {
 	inst, err := s.getInstance(id)
 	if err != nil {
 		return nil, err
 	}
-	kind, name, baseURL, authType, healthPath, err = validate(kind, name, baseURL, authType, healthPath)
+	kind, name, baseURL, authType, healthPath, versionPath, err = validate(kind, name, baseURL, authType, healthPath, versionPath)
 	if err != nil {
 		return nil, err
 	}
@@ -168,6 +179,7 @@ func (s *InstanceService) Update(id uint, kind, name, baseURL, authType, token, 
 	inst.BaseURL = baseURL
 	inst.AuthType = authType
 	inst.HealthPath = healthPath
+	inst.VersionPath = versionPath
 	inst.Enabled = enabled
 	note, err = validateNote(note)
 	if err != nil {
@@ -255,7 +267,7 @@ func (s *InstanceService) probeOne(inst *model.ServiceInstance) (string, *string
 		slog.Warn("服务探测失败", "instance", inst.Name, "url", base+inst.HealthPath)
 		return "fail", nil
 	}
-	return "ok", s.fetchVersion(base, inst.AuthType, inst.TokenCiphertext)
+	return "ok", s.fetchVersion(base, inst.VersionPath, inst.AuthType, inst.TokenCiphertext)
 }
 
 func (s *InstanceService) getOK(rawURL, authType, cipher string) bool {
@@ -268,8 +280,12 @@ func (s *InstanceService) getOK(rawURL, authType, cipher string) bool {
 }
 
 // fetchVersion 版本信息可选：端点缺失/非 2xx/解析失败一律返回 nil。
-func (s *InstanceService) fetchVersion(base, authType, cipher string) *string {
-	resp, err := s.doGet(base+"/api/version", authType, cipher)
+// path 为空时回落 /api/version（兼容存量行）。
+func (s *InstanceService) fetchVersion(base, path, authType, cipher string) *string {
+	if path == "" {
+		path = "/api/version"
+	}
+	resp, err := s.doGet(base+path, authType, cipher)
 	if err != nil {
 		return nil
 	}

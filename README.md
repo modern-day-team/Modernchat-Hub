@@ -81,7 +81,7 @@ web/
 | DELETE | `/api/v1/sessions/current` | 登出（token_version+1，全部旧 token 失效） |
 | GET / POST | `/api/v1/services` | 服务实例列表 / 注册（需管理员；`kind` 为服务类型） |
 | GET / PUT / DELETE | `/api/v1/services/:id` | 详情 / 编辑（token 空值=保持原凭据）/ 删除 |
-| POST | `/api/v1/services/:id/actions/check` | 立即探测健康与版本 |
+| POST | `/api/v1/services/:id/actions/check` | 立即探测健康与版本（路径取实例的 `healthPath` / `versionPath`，默认 `/api/health` 与 `/api/version`；接入 SSO 时配 `/healthz` 与 `/api/v1/version`） |
 | POST | `/api/v1/services/actions/check-all` | 批量并发探测全部实例（有界并发 8；概览页一键刷新） |
 | GET | `/api/v1/services/:id/update/check` | 检查目标服务新版本（经 kind 对应 adapter） |
 | GET | `/api/v1/services/:id/update/status` | 目标更新任务状态快照（轮询） |

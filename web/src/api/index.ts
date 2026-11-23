@@ -17,6 +17,7 @@ export interface ServiceUpsert {
   authType: 'none' | 'bearer'
   token?: string
   healthPath?: string
+  versionPath?: string
   enabled?: boolean
   note?: string
 }

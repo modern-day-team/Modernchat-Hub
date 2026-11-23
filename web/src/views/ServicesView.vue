@@ -32,6 +32,7 @@ const form = reactive({
   authType: 'none' as 'none' | 'bearer',
   token: '',
   healthPath: '',
+  versionPath: '',
   enabled: true,
   note: '',
 })
@@ -48,6 +49,7 @@ function openCreate() {
     authType: 'none' as const,
     token: '',
     healthPath: '',
+    versionPath: '',
     enabled: true,
     note: '',
   })
@@ -63,6 +65,7 @@ function openEdit(inst: ServiceInstance) {
     authType: inst.authType,
     token: '', // 永不回填凭据明文
     healthPath: inst.healthPath,
+    versionPath: inst.versionPath,
     enabled: inst.enabled,
     note: inst.note ?? '',
   })
@@ -83,6 +86,7 @@ async function save() {
     authType: form.authType,
     token: form.token || undefined,
     healthPath: form.healthPath,
+    versionPath: form.versionPath,
     enabled: form.enabled,
     note: form.note || undefined,
   }
@@ -339,6 +343,10 @@ const adminTarget = ref<ServiceInstance | null>(null)
         <label class="svc-form__field">
           <span class="ui-label">{{ t('svc.healthPath') }}</span>
           <UiInput v-model="form.healthPath" :placeholder="t('svc.healthPathPlaceholder')" clearable />
+        </label>
+        <label class="svc-form__field">
+          <span class="ui-label">{{ t('svc.versionPath') }}</span>
+          <UiInput v-model="form.versionPath" :placeholder="t('svc.versionPathPlaceholder')" clearable />
         </label>
         <div class="svc-form__field">
           <UiCheckbox v-model="form.enabled">{{ t('svc.enabled') }}</UiCheckbox>
