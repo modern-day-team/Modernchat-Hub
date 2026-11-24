@@ -231,13 +231,24 @@ const opsTarget = ref<ServiceInstance | null>(null)
 <template>
   <div>
     <div class="svc__head">
-      <h1 class="svc__title">{{ t('svc.title') }}</h1>
+      <div>
+        <h1 class="svc__title">{{ t('svc.title') }}</h1>
+        <p class="svc__subtitle">{{ t('svc.subtitle') }}</p>
+      </div>
       <UiButton theme="primary" @click="openCreate">{{ t('svc.add') }}</UiButton>
     </div>
 
     <div class="svc__panel ui-panel">
-      <div v-if="instances.loading && instances.list.length === 0" class="svc__empty">{{ t('common.save') }}…</div>
-      <div v-else-if="instances.list.length === 0" class="svc__empty">{{ t('svc.empty') }}</div>
+      <div v-if="instances.loading && instances.list.length === 0" class="svc__loading">
+        <span class="svc__spinner" aria-hidden="true" />
+        <span>{{ t('svc.loading') }}</span>
+      </div>
+      <div v-else-if="instances.list.length === 0" class="svc__empty">
+        <div class="svc__empty-icon" aria-hidden="true">+</div>
+        <h2 class="svc__empty-title">{{ t('svc.emptyTitle') }}</h2>
+        <p class="svc__empty-hint">{{ t('svc.emptyHint') }}</p>
+        <UiButton theme="primary" size="small" @click="openCreate">{{ t('svc.emptyAction') }}</UiButton>
+      </div>
       <table v-else class="svc__table">
         <thead>
           <tr>
@@ -456,14 +467,84 @@ const opsTarget = ref<ServiceInstance | null>(null)
   font-weight: 600;
 }
 
+.svc__subtitle {
+  margin: 4px 0 0;
+  font-size: var(--mc-fs-sm);
+  color: var(--td-text-color-secondary);
+}
+
 .svc__panel {
+  min-height: 320px;
   padding: 8px 16px;
 }
 
-.svc__empty {
-  padding: 32px 8px;
-  text-align: center;
+.svc__loading {
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   color: var(--td-text-color-secondary);
+  font-size: var(--mc-fs-sm);
+}
+
+.svc__spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--mc-hairline);
+  border-top-color: var(--td-brand-color);
+  animation: svc-spin 700ms linear infinite;
+}
+
+.svc__empty {
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.svc__empty-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--mc-radius-lg);
+  background: var(--mc-brand-soft);
+  color: var(--td-brand-color);
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.svc__empty-title {
+  margin: 14px 0 4px;
+  font-size: var(--mc-fs-emphasis);
+  font-weight: 600;
+}
+
+.svc__empty-hint {
+  margin: 0 0 16px;
+  max-width: 420px;
+  font-size: var(--mc-fs-sm);
+  color: var(--td-text-color-secondary);
+  line-height: 1.6;
+}
+
+@keyframes svc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .svc__spinner {
+    animation-duration: 2s;
+  }
 }
 
 .svc__table {

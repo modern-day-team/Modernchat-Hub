@@ -20,6 +20,9 @@ a {
   /* 背景图上的柔化层：普通页面跟随亮暗主题，认证场景固定压暗 */
   --mc-app-image-scrim: rgba(255, 255, 255, 0.72);
   --mc-auth-image-scrim: rgba(4, 10, 18, 0.45);
+  /* 软色档：与 uno.config.ts 同名档位同值，供手写 CSS 使用（UnoCSS /alpha 对 CSS 变量无效） */
+  --mc-brand-soft: color-mix(in srgb, var(--td-brand-color) 10%, transparent);
+  --mc-warning-soft: color-mix(in srgb, var(--td-warning-color) 12%, transparent);
 
   /* ===== 动效令牌：组件里的过渡与入场动画统一从这里取值 =====
      三档时长按「感知」分：状态反馈 / 位移 / 大尺度。

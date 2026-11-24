@@ -58,7 +58,19 @@ function onSubmit({ validateResult }: { validateResult: boolean | Record<string,
 
 <template>
   <main class="auth-card">
-    <h1 class="auth-card__title">{{ t('auth.register') }}</h1>
+    <div class="auth-card__brand">
+      <span class="auth-card__logo" aria-hidden="true">H</span>
+      <div>
+        <div class="auth-card__app">{{ t('app.name') }}</div>
+        <div class="auth-card__subtitle-app">{{ t('app.subtitle') }}</div>
+      </div>
+    </div>
+
+    <header class="auth-card__header">
+      <h1 class="auth-card__title">{{ t('auth.register') }}</h1>
+      <p class="auth-card__subtitle">{{ t('auth.registerSubtitle') }}</p>
+    </header>
+
     <TForm :data="form" :rules="rules" label-width="0" @submit="onSubmit">
       <TFormItem name="username">
         <UiInput v-model="form.username" :placeholder="t('auth.username')" clearable />
@@ -79,41 +91,107 @@ function onSubmit({ validateResult }: { validateResult: boolean | Record<string,
         {{ t('auth.register') }}
       </UiButton>
     </TForm>
+
     <p class="auth-card__hint">{{ t('auth.initHint') }}</p>
-    <p class="auth-card__footer">
-      <router-link to="/login">{{ t('auth.toLogin') }}</router-link>
-    </p>
+    <div class="auth-card__divider">
+      <span>{{ t('auth.hasAccount') }}</span>
+    </div>
+    <router-link to="/login" class="auth-card__link">{{ t('auth.toLogin') }}</router-link>
   </main>
 </template>
 
 <style scoped>
 .auth-card {
   width: 100%;
-  max-width: 360px;
+  max-width: 420px;
   background: var(--td-bg-color-container);
   border: 1px solid var(--mc-hairline);
   border-radius: var(--mc-radius-lg);
-  padding: 32px 28px;
+  box-shadow: var(--mc-elev-2);
+  padding: 28px 28px 24px;
+}
+
+.auth-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 18px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--mc-hairline);
+}
+
+.auth-card__logo {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--mc-radius-md);
+  background: var(--td-brand-color);
+  color: #fff;
+  font-size: var(--mc-fs-title);
+  font-weight: 600;
+}
+
+.auth-card__app {
+  font-size: var(--mc-fs-emphasis);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.auth-card__subtitle-app {
+  font-size: var(--mc-fs-caption);
+  color: var(--td-text-color-placeholder);
+}
+
+.auth-card__header {
+  margin-bottom: 20px;
 }
 
 .auth-card__title {
   font-size: var(--mc-fs-heading);
   font-weight: 600;
-  text-align: center;
-  margin: 0 0 24px;
+  margin: 0 0 6px;
+}
+
+.auth-card__subtitle {
+  margin: 0;
+  font-size: var(--mc-fs-sm);
+  color: var(--td-text-color-secondary);
 }
 
 .auth-card__hint {
-  text-align: center;
-  font-size: var(--mc-fs-sm);
-  color: var(--td-text-color-placeholder);
   margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-brand-soft);
+  color: var(--td-brand-color);
+  font-size: var(--mc-fs-sm);
+  text-align: center;
 }
 
-.auth-card__footer {
+.auth-card__divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 12px;
+  color: var(--td-text-color-placeholder);
+  font-size: var(--mc-fs-sm);
+}
+
+.auth-card__divider::before,
+.auth-card__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--mc-hairline);
+}
+
+.auth-card__link {
+  display: block;
   text-align: center;
   font-size: var(--mc-fs-sm);
-  color: var(--td-text-color-secondary);
-  margin-top: 8px;
+  font-weight: 500;
 }
 </style>
