@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- test(审计整改)：补齐 OAuth 传输层与存储层回归测试——handler 层未登录 401 / 缺参数 400 / state 原样回传 / token 错误 JSON / userinfo 缺令牌，store 层授权码原子核销（8 并发只成功 1 次）与 client/redirect 绑定校验
 - refactor(架构)：高内聚低耦合治理——`service.InstanceService` 依赖消费方定义的 `adapterResolver` 窄接口而非 `*adapter.Registry` 具体实现；`OAuthHandler` 改为注入完整 `OAuthManage` 窄接口（不再绑定 `*service.OAuthService`）；Web 代理目标统一到 `HUB_API_TARGET`（dev/preview 共用一处配置）
 - feat(oauth)：**统一登录中心（OAuth Provider）落地**——新增 `oauth_clients` / `oauth_codes` / `oauth_tokens` 三表（secret / code / token 只存 SHA-256，授权码核销用条件 UPDATE 原子防并发重放）；`GET /oauth/authorize`（需 Hub 登录态、state 原样回传、redirect_uri 精确白名单）、`POST /api/oauth/token`（**JSON body 无 grant_type**，错误仍返回 200 + `{"error"}` 与主仓库客户端口径一致）、`GET /api/oauth/userinfo`（`sub/username/nickname/email/avatar`）；管理员 `POST /api/v1/oauth/clients` 注册客户端，明文 secret 仅返回一次
 - feat(web)：概览页管理员可见「统一登录中心」卡片，注册 client_id / redirect_uri / scope 并一次性展示 clientSecret；新增 `oauth.*` 中英文案
