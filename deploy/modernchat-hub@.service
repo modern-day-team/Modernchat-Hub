@@ -1,0 +1,23 @@
+# systemd 模板单元：实例名 = 监听端口（如 systemctl enable --now modernchat-hub@8091）。
+# 部署布局与 Release 包一致：<root>/bin/ 放二进制，<root>/server/.env 放配置。
+[Unit]
+Description=Modernchat Hub (port %i)
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/modernchat-hub/server
+ExecStart=/opt/modernchat-hub/bin/modernchat-hub-server
+EnvironmentFile=/opt/modernchat-hub/server/.env
+Restart=on-failure
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/modernchat-hub
+
+[Install]
+WantedBy=multi-user.target

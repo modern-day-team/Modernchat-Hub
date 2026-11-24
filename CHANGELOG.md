@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- feat(deploy)：补齐生产发布链路——多阶段 `Dockerfile`、`deploy/nginx.conf.example`、`deploy/modernchat-hub@.service` 与 `release.yml`；推送 `v*` tag 构建 linux-amd64/arm64 双架构包（含 `.sha256`）并发布 GitHub Release；README 增补生产部署说明
 - style(web)：按主仓库 UI 真源重做 Hub 前端视觉——登录/注册页加品牌标识、副标题与背景光晕网格，修复输入框在白卡片上隐形（`UiInput` 改 `bg-page` + 新增 `line-strong` 边框档）；侧栏加工作台分组、导航状态点、服务数徽标、统一控制面板状态条与顶栏面包屑；服务管理空态改为带引导按钮的卡片并补加载态
 - i18n：同步认证页副标题、账号切换文案、服务管理副标题与空态的中英文案
 - fix(config)：修复 `LOGIN_MAX_ATTEMPTS` 未设置时登录失败锁定被静默关闭的 bug——`strconv.Atoi("")` 返回 0 被误判为「显式 0=关闭锁定」；现在区分解析失败（回退默认 5 次）与显式 0，默认锁定策略真正生效

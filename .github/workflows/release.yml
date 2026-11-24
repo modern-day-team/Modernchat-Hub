@@ -1,0 +1,73 @@
+# ============================================================================
+# 自动发版：推送 v* tag → 构建双架构发行包 → 发布 GitHub Release
+#
+# 产物：
+#   modernchat-hub-<版本>-linux-amd64.tar.gz + .sha256
+#   modernchat-hub-<版本>-linux-arm64.tar.gz + .sha256
+# 包内容：bin/modernchat-hub-server、web/dist、server/.env.example、deploy/
+#
+# 版本号以 git tag 为准；服务端 /api/version 由 ldflags 注入。
+# ============================================================================
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安装前端依赖并构建
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: 构建双架构后端并打包
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          VER="${TAG_NAME#v}"
+          COMMIT="${GITHUB_SHA::7}"
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w -X github.com/modern-day-team/Modernchat-Hub/server/internal/version.Version=${TAG_NAME} -X github.com/modern-day-team/Modernchat-Hub/server/internal/version.Commit=${COMMIT} -X github.com/modern-day-team/Modernchat-Hub/server/internal/version.BuildTime=${BUILD_TIME}"
+          mkdir -p dist-release
+          for ARCH in amd64 arm64; do
+            STAGING="staging/linux-${ARCH}"
+            mkdir -p "${STAGING}/bin" "${STAGING}/web" "${STAGING}/server" "${STAGING}/deploy"
+            CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} go build -trimpath -ldflags "${LDFLAGS}" \
+              -o "${STAGING}/bin/modernchat-hub-server" ./server/cmd/server
+            cp -r web/dist/. "${STAGING}/web/dist/"
+            cp server/.env.example "${STAGING}/server/.env.example"
+            cp -r deploy/. "${STAGING}/deploy/"
+            tar -czf "dist-release/modernchat-hub-${VER}-linux-${ARCH}.tar.gz" -C "${STAGING}" .
+            sha256sum "dist-release/modernchat-hub-${VER}-linux-${ARCH}.tar.gz" \
+              > "dist-release/modernchat-hub-${VER}-linux-${ARCH}.tar.gz.sha256"
+          done
+          ls -la dist-release/
+
+      - name: 发布 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG_NAME" --title "$TAG_NAME" --generate-notes dist-release/* \
+            || gh release upload "$TAG_NAME" --clobber dist-release/*

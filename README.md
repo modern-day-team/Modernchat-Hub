@@ -33,6 +33,17 @@ go run ./cmd/server
 cd ../web && npm install && npm run dev
 ```
 
+## 生产部署
+
+仓库已提供完整发布链路：
+
+- `Dockerfile`：多阶段构建，前端 `web/dist` + Go 后端单镜像；外部 MySQL 必需，敏感配置用环境变量注入。
+- `deploy/nginx.conf.example`：静态资源长缓存 + `gzip_static` + `/api` 反代模板。
+- `deploy/modernchat-hub@.service`：systemd 模板单元，实例名为监听端口（如 `modernchat-hub@8091`）。
+- `.github/workflows/release.yml`：推送 `v*` tag 生成 linux-amd64/arm64 双架构发行包（含 `.sha256`）并发布 GitHub Release。
+
+发行包目录约定与 systemd 单元一致：`<root>/bin/modernchat-hub-server`、`<root>/server/.env`、`<root>/web/dist`。
+
 ## 端口
 
 | 服务 | 端口 | 说明 |
