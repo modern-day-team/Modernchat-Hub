@@ -81,12 +81,17 @@ func parseTrustedProxies() []string {
 
 // parseLoginLock LOGIN_MAX_ATTEMPTS（0=关闭，否则 2–20，默认 5）与 LOGIN_LOCK_MINUTES（1–1440，默认 15）。
 func parseLoginLock() (int, int) {
-	n, _ := strconv.Atoi(os.Getenv("LOGIN_MAX_ATTEMPTS"))
+	// 必须区分"未设置/解析失败"（回退默认 5）与"显式 0"（关闭锁定）：
+	// Atoi("") 返回 0 且 err != nil，忽略错误会把默认锁定静默关掉。
+	raw := os.Getenv("LOGIN_MAX_ATTEMPTS")
+	n, err := strconv.Atoi(raw)
 	maxAttempts := 5
-	if n == 0 {
-		maxAttempts = 0 // 显式 0 = 关闭锁定
-	} else if n >= 2 && n <= 20 {
-		maxAttempts = n
+	if err == nil {
+		if n == 0 {
+			maxAttempts = 0 // 显式 0 = 关闭锁定
+		} else if n >= 2 && n <= 20 {
+			maxAttempts = n
+		}
 	}
 	minutes, _ := strconv.Atoi(getEnv("LOGIN_LOCK_MINUTES", "15"))
 	if minutes < 1 || minutes > 1440 {
