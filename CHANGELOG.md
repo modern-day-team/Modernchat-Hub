@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- feat(adapter)：**接入 Modernchat-sso 更新编排**——新增 `adapter/modernchatsso.go`（kind=`modernchat-sso`）：`Check` 为 `POST /api/v1/admin/update/checks`、`Status` 为 `GET /api/v1/admin/update`、`Start` 为 `POST /api/v1/admin/update`（sso 返回 202 + 状态快照、无 `started` 字段，2xx 即视为受理；StatusView 无 `mode` 字段归一后留空）；错误归一沿用 `decodeResponse`（401→凭据失效 / 404→不支持 / 409→更新中 / 400→透传原因）。组合根 `router.Setup` 一行注册；sso 管理面（用户/设置）未代理，需 Adminer 能力时再扩展。配套 `modernchatsso_test.go` 六个用例（端点/方法/Bearer/归一/错误语义）。前端服务类型新增 `modernchat-sso` 选项，"更新管理"入口按已注册 Updater 的类型白名单展示（`updateKinds`）；新增 `svc.kindModernchatSso` 中英文案。项目组版本矩阵现覆盖主仓库与 sso
 - test(web)：新增 API 客户端单元测试（token 读写、Bearer、401 清会话、skipAuth、错误归一、网络失败），并接入 CI
 - feat(deploy)：补齐生产发布链路——多阶段 `Dockerfile`、`deploy/nginx.conf.example`、`deploy/modernchat-hub@.service` 与 `release.yml`；推送 `v*` tag 构建 linux-amd64/arm64 双架构包（含 `.sha256`）并发布 GitHub Release；README 增补生产部署说明
 - style(web)：按主仓库 UI 真源重做 Hub 前端视觉——登录/注册页加品牌标识、副标题与背景光晕网格，修复输入框在白卡片上隐形（`UiInput` 改 `bg-page` + 新增 `line-strong` 边框档）；侧栏加工作台分组、导航状态点、服务数徽标、统一控制面板状态条与顶栏面包屑；服务管理空态改为带引导按钮的卡片并补加载态

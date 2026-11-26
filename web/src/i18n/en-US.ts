@@ -62,6 +62,7 @@ export default {
     kind: 'Kind',
     kindGeneric: 'Generic (health/version only)',
     kindModernchatNew: 'modern-chat-new (main app)',
+    kindModernchatSso: 'modernchat-sso (SSO service)',
     kindHint: 'Kind decides available capabilities; more kinds come via adapters',
     name: 'Name',
     namePlaceholder: 'Instance name, 1–30 chars',

@@ -110,6 +110,13 @@ async function save() {
 // ── 行内探测 ──
 const checkingId = ref<number | null>(null)
 
+// 支持"更新管理"的实例类型：对应后端已注册 Updater 的 adapter（modernchat-new / modernchat-sso）
+const updateKinds = ['modernchat-new', 'modernchat-sso']
+
+function canUpdate(kind: string): boolean {
+  return updateKinds.includes(kind)
+}
+
 async function checkRow(inst: ServiceInstance) {
   checkingId.value = inst.id
   try {
@@ -287,7 +294,7 @@ const opsTarget = ref<ServiceInstance | null>(null)
                 {{ checkingId === inst.id ? t('svc.checking') : t('svc.check') }}
               </UiButton>
               <UiButton
-                v-if="inst.kind === 'modernchat-new'"
+                v-if="canUpdate(inst.kind)"
                 variant="text"
                 theme="primary"
                 size="small"
@@ -339,6 +346,7 @@ const opsTarget = ref<ServiceInstance | null>(null)
           <select v-model="form.kind" class="svc-form__select">
             <option value="generic">{{ t('svc.kindGeneric') }}</option>
             <option value="modernchat-new">{{ t('svc.kindModernchatNew') }}</option>
+            <option value="modernchat-sso">{{ t('svc.kindModernchatSso') }}</option>
           </select>
           <span class="ui-hint">{{ t('svc.kindHint') }}</span>
         </div>

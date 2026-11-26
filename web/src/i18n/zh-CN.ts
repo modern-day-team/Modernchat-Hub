@@ -62,6 +62,7 @@ export default {
     kind: '服务类型',
     kindGeneric: '通用（仅健康/版本探测）',
     kindModernchatNew: 'modern-chat-new（主仓库）',
+    kindModernchatSso: 'modernchat-sso（SSO 服务）',
     kindHint: '类型决定可用的管理能力；更多类型经 adapter 接入',
     name: '名称',
     namePlaceholder: '实例名称，1-30 字符',

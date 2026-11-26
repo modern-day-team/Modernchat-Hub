@@ -72,6 +72,7 @@ func Setup(cfg config.Config, users *store.UserStore, instances *store.InstanceS
 	mcn := adapter.NewModernchatNew()
 	updates.RegisterUpdater(mcn)
 	updates.RegisterAdmin(mcn)
+	updates.RegisterUpdater(adapter.NewModernchatSSO()) // sso 仅接入更新编排；其管理面未代理（无对应 Adminer 注册）
 	instancesSvc := service.NewInstanceService(instances, box, updates)
 	instH := handler.NewInstanceHandler(instancesSvc, instancesSvc, instancesSvc)
 
