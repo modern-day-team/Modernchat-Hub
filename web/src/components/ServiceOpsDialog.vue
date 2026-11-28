@@ -159,7 +159,7 @@ function close() {
         <div v-for="p in plugins" :key="p.name" class="ops__row">
           <div>
             <strong>{{ p.name }}</strong>
-            <span class="ops__meta">v{{ p.version }} · {{ p.installCount }} {{ t('ops.installs') }}</span>
+            <span class="ops__meta">v{{ p.version }} | {{ p.installCount }} {{ t('ops.installs') }}</span>
           </div>
           <UiTag :theme="p.globalDisabled ? 'default' : 'success'">
             {{ p.globalDisabled ? t('ops.disabled') : t('ops.enabled') }}
@@ -191,7 +191,7 @@ function close() {
           <div>
             <strong>{{ a.action }}</strong>
             <span class="ops__meta">
-              {{ a.targetType }} {{ a.targetName }} · {{ a.ip }} · {{ a.createdAt }}
+              {{ a.targetType }} {{ a.targetName }} | {{ a.ip }} | {{ a.createdAt }}
             </span>
           </div>
           <span class="ops__detail">{{ a.detail }}</span>
@@ -235,13 +235,13 @@ function close() {
 
 .ops__meta {
   display: block;
-  font-size: 12px;
+  font-size: var(--mc-fs-sm);
   color: var(--mc-text-faint);
 }
 
 .ops__detail {
   max-width: 280px;
-  font-size: 12px;
+  font-size: var(--mc-fs-sm);
   color: var(--mc-text-faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -268,8 +268,8 @@ function close() {
 }
 
 .ops__textarea--json {
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 12px;
+  font-family: var(--mc-font-mono);
+  font-size: var(--mc-fs-sm);
   line-height: 1.5;
 }
 

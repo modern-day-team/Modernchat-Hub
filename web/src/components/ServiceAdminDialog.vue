@@ -195,7 +195,7 @@ function uptimeText(sec?: number) {
 <template>
   <UiDialog
     :visible="props.visible"
-    :header="`${t('adm.title')} · ${instance?.name ?? ''}`"
+    :header="`${t('adm.title')} | ${instance?.name ?? ''}`"
     :width="760"
     :footer="false"
     @update:visible="(v: boolean) => { if (!v) close() }"
@@ -348,8 +348,8 @@ function uptimeText(sec?: number) {
 .adm__stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: var(--mc-sp-2);
+  margin-bottom: var(--mc-sp-4);
 }
 
 .adm__tile {
@@ -396,6 +396,11 @@ function uptimeText(sec?: number) {
 
 .adm__select:focus {
   border-color: var(--td-brand-color);
+}
+
+.adm__select:focus-visible {
+  outline: 2px solid var(--td-brand-color);
+  outline-offset: 1px;
 }
 
 .adm__table {
@@ -496,7 +501,7 @@ function uptimeText(sec?: number) {
   border-radius: var(--mc-radius-md);
   background: var(--td-bg-color-page);
   border: 1px solid var(--mc-hairline);
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--mc-font-mono);
   font-size: var(--mc-fs-emphasis);
   letter-spacing: 0.5px;
   user-select: all;

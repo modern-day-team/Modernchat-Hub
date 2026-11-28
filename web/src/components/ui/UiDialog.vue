@@ -135,7 +135,7 @@ onBeforeUnmount(unlockScroll)
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--mc-overlay);
 }
 
 .ui-dialog__panel {

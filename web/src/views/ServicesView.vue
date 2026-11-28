@@ -236,16 +236,18 @@ const opsTarget = ref<ServiceInstance | null>(null)
 </script>
 
 <template>
-  <div>
-    <div class="svc__head">
+  <div class="mc-page mc-page--wide">
+    <div class="mc-page-head">
       <div>
-        <h1 class="svc__title">{{ t('svc.title') }}</h1>
-        <p class="svc__subtitle">{{ t('svc.subtitle') }}</p>
+        <h1 class="mc-page-head__title">{{ t('svc.title') }}</h1>
+        <p class="mc-page-head__desc">{{ t('svc.subtitle') }}</p>
       </div>
-      <UiButton theme="primary" @click="openCreate">{{ t('svc.add') }}</UiButton>
+      <div class="mc-page-head__actions">
+        <UiButton theme="primary" @click="openCreate">{{ t('svc.add') }}</UiButton>
+      </div>
     </div>
 
-    <div class="svc__panel ui-panel">
+    <div class="svc__panel mc-panel">
       <div v-if="instances.loading && instances.list.length === 0" class="svc__loading">
         <span class="svc__spinner" aria-hidden="true" />
         <span>{{ t('svc.loading') }}</span>
@@ -256,78 +258,81 @@ const opsTarget = ref<ServiceInstance | null>(null)
         <p class="svc__empty-hint">{{ t('svc.emptyHint') }}</p>
         <UiButton theme="primary" size="small" @click="openCreate">{{ t('svc.emptyAction') }}</UiButton>
       </div>
-      <table v-else class="svc__table">
-        <thead>
-          <tr>
-            <th>{{ t('svc.name') }}</th>
-            <th>{{ t('svc.baseUrl') }}</th>
-            <th>{{ t('svc.lastCheck') }}</th>
-            <th class="svc__ops-col"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="inst in instances.list" :key="inst.id">
-            <td>
-              <div class="svc__name">
-                {{ inst.name }}
-                <UiTag v-if="inst.kind !== 'generic'" theme="primary" variant="outline" size="small">{{ inst.kind }}</UiTag>
-                <UiTag v-if="!inst.enabled" theme="default" size="small">{{ t('svc.statusUnknown') }}</UiTag>
-              </div>
-              <div v-if="inst.note" class="svc__note">{{ inst.note }}</div>
-            </td>
-            <td>
-              <div class="svc__url">{{ inst.baseUrl }}</div>
-              <div class="svc__meta">
-                <UiTag theme="default" variant="outline" size="small">{{ inst.authType === 'bearer' ? t('svc.authBearer') : t('svc.authNone') }}</UiTag>
-                <span class="svc__path">{{ inst.healthPath }}</span>
-              </div>
-            </td>
-            <td>
-              <UiTag :theme="statusTheme(inst.lastStatus)">{{ statusText(inst.lastStatus) }}</UiTag>
-              <div class="svc__meta">
-                <span>{{ t('svc.version') }}: {{ inst.lastVersion ?? '—' }}</span>
-                <span class="svc__time">{{ fmtTime(inst.lastCheckAt) }}</span>
-              </div>
-            </td>
-            <td class="svc__ops">
-              <UiButton variant="outline" size="small" :loading="checkingId === inst.id" @click="checkRow(inst)">
-                {{ checkingId === inst.id ? t('svc.checking') : t('svc.check') }}
-              </UiButton>
-              <UiButton
-                v-if="canUpdate(inst.kind)"
-                variant="text"
-                theme="primary"
-                size="small"
-                @click="openUpdate(inst)"
-              >
-                {{ t('svc.rowUpdate') }}
-              </UiButton>
-              <UiButton
-                v-if="inst.kind === 'modernchat-new'"
-                variant="text"
-                theme="primary"
-                size="small"
-                @click="adminTarget = inst"
-              >
-                {{ t('svc.rowAdmin') }}
-              </UiButton>
-              <UiButton
-                v-if="inst.kind === 'modernchat-new'"
-                variant="text"
-                theme="primary"
-                size="small"
-                @click="opsTarget = inst"
-              >
-                {{ t('svc.rowOps') }}
-              </UiButton>
-              <UiButton variant="text" size="small" @click="openEdit(inst)">{{ t('svc.rowEdit') }}</UiButton>
-              <UiButton variant="text" theme="danger" size="small" @click="deleteTarget = inst">
-                {{ t('svc.rowDelete') }}
-              </UiButton>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <!-- <768 时表格横向滚动，卡片自身不被撑破 -->
+      <div v-else class="svc__table-wrap">
+        <table class="svc__table">
+          <thead>
+            <tr>
+              <th>{{ t('svc.name') }}</th>
+              <th>{{ t('svc.baseUrl') }}</th>
+              <th>{{ t('svc.lastCheck') }}</th>
+              <th class="svc__ops-col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="inst in instances.list" :key="inst.id">
+              <td>
+                <div class="svc__name">
+                  {{ inst.name }}
+                  <UiTag v-if="inst.kind !== 'generic'" theme="primary" variant="outline" size="small">{{ inst.kind }}</UiTag>
+                  <UiTag v-if="!inst.enabled" theme="default" size="small">{{ t('svc.statusUnknown') }}</UiTag>
+                </div>
+                <div v-if="inst.note" class="svc__note">{{ inst.note }}</div>
+              </td>
+              <td>
+                <div class="svc__url">{{ inst.baseUrl }}</div>
+                <div class="svc__meta">
+                  <UiTag theme="default" variant="outline" size="small">{{ inst.authType === 'bearer' ? t('svc.authBearer') : t('svc.authNone') }}</UiTag>
+                  <span class="svc__path">{{ inst.healthPath }}</span>
+                </div>
+              </td>
+              <td>
+                <UiTag :theme="statusTheme(inst.lastStatus)">{{ statusText(inst.lastStatus) }}</UiTag>
+                <div class="svc__meta">
+                  <span>{{ t('svc.version') }}: {{ inst.lastVersion ?? '—' }}</span>
+                  <span class="svc__time">{{ fmtTime(inst.lastCheckAt) }}</span>
+                </div>
+              </td>
+              <td class="svc__ops">
+                <UiButton variant="outline" size="small" :loading="checkingId === inst.id" @click="checkRow(inst)">
+                  {{ checkingId === inst.id ? t('svc.checking') : t('svc.check') }}
+                </UiButton>
+                <UiButton
+                  v-if="canUpdate(inst.kind)"
+                  variant="text"
+                  theme="primary"
+                  size="small"
+                  @click="openUpdate(inst)"
+                >
+                  {{ t('svc.rowUpdate') }}
+                </UiButton>
+                <UiButton
+                  v-if="inst.kind === 'modernchat-new'"
+                  variant="text"
+                  theme="primary"
+                  size="small"
+                  @click="adminTarget = inst"
+                >
+                  {{ t('svc.rowAdmin') }}
+                </UiButton>
+                <UiButton
+                  v-if="inst.kind === 'modernchat-new'"
+                  variant="text"
+                  theme="primary"
+                  size="small"
+                  @click="opsTarget = inst"
+                >
+                  {{ t('svc.rowOps') }}
+                </UiButton>
+                <UiButton variant="text" size="small" @click="openEdit(inst)">{{ t('svc.rowEdit') }}</UiButton>
+                <UiButton variant="text" theme="danger" size="small" @click="deleteTarget = inst">
+                  {{ t('svc.rowDelete') }}
+                </UiButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- 新增/编辑弹窗 -->
@@ -462,28 +467,9 @@ const opsTarget = ref<ServiceInstance | null>(null)
 </template>
 
 <style scoped>
-.svc__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.svc__title {
-  margin: 0;
-  font-size: var(--mc-fs-title);
-  font-weight: 600;
-}
-
-.svc__subtitle {
-  margin: 4px 0 0;
-  font-size: var(--mc-fs-sm);
-  color: var(--td-text-color-secondary);
-}
-
+/* 页面骨架（限宽 / 留白 / 区块节奏）由根节点的 .mc-page--wide 提供 */
 .svc__panel {
-  min-height: 320px;
-  padding: 8px 16px;
+  padding: var(--mc-sp-2) var(--mc-sp-4);
 }
 
 .svc__loading {
@@ -491,7 +477,7 @@ const opsTarget = ref<ServiceInstance | null>(null)
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--mc-sp-2);
   color: var(--td-text-color-secondary);
   font-size: var(--mc-fs-sm);
 }
@@ -511,7 +497,7 @@ const opsTarget = ref<ServiceInstance | null>(null)
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--mc-sp-6);
   text-align: center;
 }
 
@@ -530,17 +516,17 @@ const opsTarget = ref<ServiceInstance | null>(null)
 }
 
 .svc__empty-title {
-  margin: 14px 0 4px;
+  margin: var(--mc-sp-4) 0 var(--mc-sp-1);
   font-size: var(--mc-fs-emphasis);
   font-weight: 600;
 }
 
 .svc__empty-hint {
-  margin: 0 0 16px;
-  max-width: 420px;
+  margin: 0 0 var(--mc-sp-4);
+  max-width: var(--mc-container-narrow);
   font-size: var(--mc-fs-sm);
   color: var(--td-text-color-secondary);
-  line-height: 1.6;
+  line-height: var(--mc-lh-normal);
 }
 
 @keyframes svc-spin {
@@ -551,8 +537,13 @@ const opsTarget = ref<ServiceInstance | null>(null)
 
 @media (prefers-reduced-motion: reduce) {
   .svc__spinner {
-    animation-duration: 2s;
+    animation: none;
   }
+}
+
+.svc__table-wrap {
+  /* <768 时横向滚动，卡片自身不被长 URL / 操作按钮撑破 */
+  overflow-x: auto;
 }
 
 .svc__table {
@@ -565,12 +556,12 @@ const opsTarget = ref<ServiceInstance | null>(null)
   text-align: left;
   font-weight: 500;
   color: var(--td-text-color-secondary);
-  padding: 10px 8px;
+  padding: var(--mc-sp-3) var(--mc-sp-2);
   border-bottom: 1px solid var(--mc-hairline);
 }
 
 .svc__table td {
-  padding: 10px 8px;
+  padding: var(--mc-sp-3) var(--mc-sp-2);
   border-bottom: 1px solid var(--mc-hairline);
   vertical-align: top;
 }
@@ -582,12 +573,12 @@ const opsTarget = ref<ServiceInstance | null>(null)
 .svc__name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--mc-sp-1);
   font-weight: 500;
 }
 
 .svc__note {
-  margin-top: 2px;
+  margin-top: var(--mc-sp-1);
   font-size: var(--mc-fs-sm);
   color: var(--td-text-color-placeholder);
 }
@@ -599,8 +590,8 @@ const opsTarget = ref<ServiceInstance | null>(null)
 .svc__meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
+  gap: var(--mc-sp-2);
+  margin-top: var(--mc-sp-1);
   font-size: var(--mc-fs-sm);
   color: var(--td-text-color-secondary);
 }
@@ -619,17 +610,17 @@ const opsTarget = ref<ServiceInstance | null>(null)
   margin-left: 4px;
 }
 
-/* 表单 */
+/* 表单：弹窗内部纵向排布，间距归刻度 */
 .svc-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--mc-sp-4);
 }
 
 .svc-form__field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--mc-sp-1);
 }
 
 .svc-form__select {
@@ -648,17 +639,22 @@ const opsTarget = ref<ServiceInstance | null>(null)
   border-color: var(--td-brand-color);
 }
 
+.svc-form__select:focus-visible {
+  outline: 2px solid var(--td-brand-color);
+  outline-offset: 1px;
+}
+
 /* 更新管理对话框 */
 .upd {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--mc-sp-3);
 }
 
 .upd__row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--mc-sp-2);
   font-size: var(--mc-fs-body);
 }
 
@@ -676,10 +672,10 @@ const opsTarget = ref<ServiceInstance | null>(null)
 }
 
 .upd__error {
-  padding: 8px 10px;
+  padding: var(--mc-sp-2) var(--mc-sp-3);
   border-radius: var(--mc-radius-sm);
   background: var(--td-error-color);
-  color: #fff;
+  color: var(--td-text-color-anti);
   font-size: var(--mc-fs-sm);
   word-break: break-all;
 }
@@ -687,8 +683,8 @@ const opsTarget = ref<ServiceInstance | null>(null)
 .upd__check {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: var(--mc-sp-3);
+  padding: var(--mc-sp-2) var(--mc-sp-3);
   border: 1px solid var(--mc-hairline);
   border-radius: var(--mc-radius-md);
   font-size: var(--mc-fs-body);
@@ -697,12 +693,12 @@ const opsTarget = ref<ServiceInstance | null>(null)
 .upd__lines {
   max-height: 180px;
   overflow: auto;
-  padding: 8px 10px;
+  padding: var(--mc-sp-2) var(--mc-sp-3);
   border-radius: var(--mc-radius-md);
   background: var(--td-bg-color-page);
-  font-family: ui-monospace, Consolas, monospace;
+  font-family: var(--mc-font-mono);
   font-size: var(--mc-fs-sm);
-  line-height: 1.6;
+  line-height: var(--mc-lh-normal);
   color: var(--td-text-color-secondary);
 }
 
@@ -714,6 +710,6 @@ const opsTarget = ref<ServiceInstance | null>(null)
 .upd__ops {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--mc-sp-2);
 }
 </style>

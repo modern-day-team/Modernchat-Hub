@@ -50,6 +50,8 @@ export default {
     status: 'Status',
     version: 'Version',
     name: 'Name',
+    loading: 'Loading…',
+    retry: 'Retry',
   },
   svc: {
     title: 'Services',
@@ -194,7 +196,7 @@ export default {
     settingsDone: 'Site settings saved',
   },
   oauth: {
-    title: 'Unified sign-in · OAuth clients',
+    title: 'Unified sign-in | OAuth clients',
     hint: 'Register OAuth clients for project services. redirect_uri is matched exactly; clientSecret is shown once — save it into the target service config (modern-chat-new: SSO_CLIENT_ID / SSO_CLIENT_SECRET).',
     clientIdPlaceholder: 'e.g. modern-chat-new',
     redirectPlaceholder: 'e.g. https://chat.example.com/api/auth/sso/callback',

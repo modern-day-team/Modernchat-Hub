@@ -135,8 +135,9 @@ function onClick(e: MouseEvent) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* 旋转动画直接停用：保留静态圆环表示加载中，避免持续运动 */
   .ui-btn__spin {
-    animation-duration: 2s;
+    animation: none;
   }
 }
 </style>

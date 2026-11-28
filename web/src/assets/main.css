@@ -22,7 +22,12 @@ a {
   --mc-auth-image-scrim: rgba(4, 10, 18, 0.45);
   /* 软色档：与 uno.config.ts 同名档位同值，供手写 CSS 使用（UnoCSS /alpha 对 CSS 变量无效） */
   --mc-brand-soft: color-mix(in srgb, var(--td-brand-color) 10%, transparent);
+  --mc-brand-ring: color-mix(in srgb, var(--td-brand-color) 24%, transparent);
   --mc-warning-soft: color-mix(in srgb, var(--td-warning-color) 12%, transparent);
+  /* 模态/抽屉遮罩：亮暗共用同一压黑值，只在这里调 */
+  --mc-overlay: rgba(0, 0, 0, 0.4);
+  /* 等宽字体：仅限真实代码 / 日志 / 密码原文场景，界面文案一律继承正文字体 */
+  --mc-font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
 
   /* ===== 动效令牌：组件里的过渡与入场动画统一从这里取值 =====
      三档时长按「感知」分：状态反馈 / 位移 / 大尺度。

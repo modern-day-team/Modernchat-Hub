@@ -17,6 +17,8 @@ const auth = useAuthStore()
 
 const form = reactive({ username: '', password: '' })
 const loading = ref(false)
+/* 提交失败的内联错误：比 toast 更靠近表单且不自动消失（toast 仍保留给全局观察） */
+const error = ref('')
 
 const rules: FormProps['rules'] = {
   username: [{ required: true, message: t('auth.required') }],
@@ -34,11 +36,13 @@ function afterLogin() {
 function onSubmit({ validateResult }: { validateResult: boolean | Record<string, unknown> }) {
   if (validateResult !== true || loading.value) return
   loading.value = true
+  error.value = ''
   auth
     .login(form.username, form.password)
     .then(afterLogin)
     .catch((e: unknown) => {
-      MessagePlugin.error(e instanceof ApiError ? e.message : t('auth.failed'))
+      error.value = e instanceof ApiError ? e.message : t('auth.failed')
+      MessagePlugin.error(error.value)
     })
     .finally(() => {
       loading.value = false
@@ -63,11 +67,13 @@ function onSubmit({ validateResult }: { validateResult: boolean | Record<string,
 
     <TForm :data="form" :rules="rules" label-width="0" @submit="onSubmit">
       <TFormItem name="username">
-        <UiInput v-model="form.username" :placeholder="t('auth.username')" clearable />
+        <UiInput v-model="form.username" :placeholder="t('auth.username')" :aria-label="t('auth.username')" clearable />
       </TFormItem>
       <TFormItem name="password">
-        <UiInput v-model="form.password" type="password" :placeholder="t('auth.password')" clearable />
+        <UiInput v-model="form.password" type="password" :placeholder="t('auth.password')" :aria-label="t('auth.password')" clearable />
       </TFormItem>
+      <!-- 提交失败的持久内联提示（错误说明靠近表单，不随 toast 消失） -->
+      <p v-if="error" class="auth-card__error" role="alert">{{ error }}</p>
       <UiButton theme="primary" type="submit" block :loading="loading">
         {{ t('auth.login') }}
       </UiButton>
@@ -81,22 +87,22 @@ function onSubmit({ validateResult }: { validateResult: boolean | Record<string,
 </template>
 
 <style scoped>
+/* 卡片宽度由 App.vue 外层的 .mc-container--narrow（400 档容器）统一限宽 */
 .auth-card {
   width: 100%;
-  max-width: 400px;
   background: var(--td-bg-color-container);
   border: 1px solid var(--mc-hairline);
   border-radius: var(--mc-radius-lg);
   box-shadow: var(--mc-elev-2);
-  padding: 28px 28px 24px;
+  padding: var(--mc-sp-6) var(--mc-sp-6) var(--mc-sp-5);
 }
 
 .auth-card__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-bottom: 18px;
-  margin-bottom: 20px;
+  gap: var(--mc-sp-2);
+  padding-bottom: var(--mc-sp-4);
+  margin-bottom: var(--mc-sp-5);
   border-bottom: 1px solid var(--mc-hairline);
 }
 
@@ -109,7 +115,7 @@ function onSubmit({ validateResult }: { validateResult: boolean | Record<string,
   flex-shrink: 0;
   border-radius: var(--mc-radius-md);
   background: var(--td-brand-color);
-  color: #fff;
+  color: var(--td-text-color-anti);
   font-size: var(--mc-fs-title);
   font-weight: 600;
 }
@@ -126,26 +132,39 @@ function onSubmit({ validateResult }: { validateResult: boolean | Record<string,
 }
 
 .auth-card__header {
-  margin-bottom: 20px;
+  margin-bottom: var(--mc-sp-5);
 }
 
 .auth-card__title {
   font-size: var(--mc-fs-heading);
   font-weight: 600;
-  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+  line-height: var(--mc-lh-tight);
+  margin: 0 0 var(--mc-sp-1);
 }
 
 .auth-card__subtitle {
   margin: 0;
   font-size: var(--mc-fs-sm);
+  line-height: var(--mc-lh-normal);
   color: var(--td-text-color-secondary);
+}
+
+.auth-card__error {
+  margin: 0 0 var(--mc-sp-3);
+  padding: var(--mc-sp-2) var(--mc-sp-3);
+  border-radius: var(--mc-radius-sm);
+  background: var(--td-error-color-1, rgba(227, 77, 89, 0.08));
+  color: var(--td-error-color);
+  font-size: var(--mc-fs-sm);
+  line-height: var(--mc-lh-normal);
 }
 
 .auth-card__divider {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 20px 0 12px;
+  gap: var(--mc-sp-2);
+  margin: var(--mc-sp-5) 0 var(--mc-sp-3);
   color: var(--td-text-color-placeholder);
   font-size: var(--mc-fs-sm);
 }
