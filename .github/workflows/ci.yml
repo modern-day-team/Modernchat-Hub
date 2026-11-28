@@ -6,10 +6,11 @@
 # - web：npm ci → 类型检查 → 构建 → oxlint / eslint（只检查不改文件）
 name: CI
 
+# 只监听 main push + PR，避免同一提交被 push 和 pull_request 各跑一遍
 on:
   push:
     branches:
-      - '**'
+      - main
   pull_request:
 
 # 同一分支的新推送取消仍在跑的旧运行，省配额
@@ -67,6 +68,11 @@ jobs:
       - name: go test（含竞态检测）
         working-directory: server
         run: go test ./... -race -count=1
+
+      # 集成测试：OAuth Provider 全链路走真实 MySQL（连接失败会 t.Skip，库是现成的，别让测试空转）
+      - name: go test（integration，真实 MySQL）
+        working-directory: server
+        run: go test -tags integration ./test/ -count=1
 
   web:
     name: Web（Vue）

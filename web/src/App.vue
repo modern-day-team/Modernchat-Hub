@@ -41,7 +41,10 @@ async function logout() {
 <template>
   <div v-if="bare" class="app-bare">
     <div class="app-bare__glow" aria-hidden="true" />
-    <router-view />
+    <!-- 认证卡片限宽走五档容器里的 narrow（--mc-container-narrow） -->
+    <div class="mc-container mc-container--narrow">
+      <router-view />
+    </div>
   </div>
   <div v-else class="app-shell">
     <aside class="app-side">
@@ -97,6 +100,7 @@ async function logout() {
         </div>
         <button type="button" class="app-top__lang" @click="toggleLang">{{ t('lang.toggle') }}</button>
       </header>
+      <!-- 页面骨架（限宽、留白、区块节奏）由各视图根节点的 .mc-page--wide 负责 -->
       <main class="app-content">
         <router-view />
       </main>
@@ -111,7 +115,8 @@ async function logout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  /* 左右留白交给 .mc-container（= 槽宽），这里只给上下留白，免得窄屏两侧叠成双份 */
+  padding: var(--mc-page-y) 0;
   overflow: hidden;
   background:
     radial-gradient(50% 40% at 50% 0%, var(--mc-brand-soft), transparent 70%),
@@ -129,28 +134,31 @@ async function logout() {
   mask-image: radial-gradient(60% 60% at 50% 30%, #000, transparent 80%);
 }
 
+/* 面板壳。移动优先：<768 时侧栏横排在顶部（品牌 + 退出登录一行、导航横排一行），
+   不引入抽屉状态与新依赖；≥768 才回到左侧竖栏。 */
 .app-shell {
   height: 100%;
   display: flex;
+  flex-direction: column;
 }
 
-/* 左侧窄导航 */
 .app-side {
-  width: 200px;
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mc-sp-3);
+  padding: var(--mc-sp-3) var(--mc-gutter);
   background: var(--td-bg-color-container);
-  border-right: 1px solid var(--mc-hairline);
-  padding: 16px 12px;
-  gap: 20px;
+  border-bottom: 1px solid var(--mc-hairline);
 }
 
 .app-side__brand {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 8px;
+  gap: var(--mc-sp-2);
 }
 
 .app-side__logo {
@@ -162,7 +170,7 @@ async function logout() {
   justify-content: center;
   border-radius: var(--mc-radius-md);
   background: var(--td-brand-color);
-  color: #fff;
+  color: var(--td-text-color-anti);
   font-weight: 600;
   font-size: var(--mc-fs-title);
 }
@@ -170,7 +178,7 @@ async function logout() {
 .app-side__name {
   font-size: var(--mc-fs-emphasis);
   font-weight: 600;
-  line-height: 1.3;
+  line-height: var(--mc-lh-snug);
 }
 
 .app-side__sub {
@@ -178,8 +186,9 @@ async function logout() {
   color: var(--td-text-color-placeholder);
 }
 
+/* 「工作区」小标题只服务竖栏，顶部栏里没有它的位置 */
 .app-side__section {
-  margin: 0 8px -10px;
+  display: none;
   font-size: var(--mc-fs-caption);
   color: var(--td-text-color-placeholder);
   letter-spacing: 0.08em;
@@ -187,19 +196,22 @@ async function logout() {
 }
 
 .app-side__nav {
+  /* 顶部栏里导航独占第二行 */
+  order: 3;
+  flex-basis: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
+  flex-wrap: wrap;
+  gap: var(--mc-sp-1);
 }
 
 .app-nav__item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--mc-sp-2);
+  padding: var(--mc-sp-2) var(--mc-sp-3);
   border-radius: var(--mc-radius-md);
   font-size: var(--mc-fs-body);
+  line-height: var(--mc-lh-snug);
   color: var(--td-text-color-secondary);
   transition:
     background-color var(--mc-dur-instant) var(--mc-ease-out),
@@ -227,15 +239,16 @@ async function logout() {
   background: var(--td-bg-color-container-hover);
   color: var(--td-text-color-secondary);
   font-size: var(--mc-fs-caption);
+  line-height: var(--mc-lh-snug);
   text-align: center;
 }
 
 .app-side__status {
-  display: flex;
+  display: none;
   align-items: center;
-  gap: 8px;
-  margin: 0 6px;
-  padding: 8px 10px;
+  gap: var(--mc-sp-2);
+  margin: 0 var(--mc-sp-1);
+  padding: var(--mc-sp-2) var(--mc-sp-3);
   border-radius: var(--mc-radius-md);
   background: var(--mc-brand-soft);
   color: var(--td-brand-color);
@@ -273,17 +286,17 @@ async function logout() {
 
 .app-side__foot {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border-top: 1px solid var(--mc-hairline);
-  padding-top: 12px;
+  align-items: center;
+  gap: var(--mc-sp-2);
 }
 
+/* 用户信息只在竖栏里展示；顶部栏空间有限，保留退出登录即可 */
 .app-side__user {
-  display: flex;
+  display: none;
   align-items: center;
-  gap: 8px;
-  padding: 0 6px;
+  gap: var(--mc-sp-2);
+  min-width: 0;
+  padding: 0 var(--mc-sp-2);
 }
 
 .app-side__avatar {
@@ -294,33 +307,93 @@ async function logout() {
   align-items: center;
   justify-content: center;
   border-radius: var(--mc-radius-pill);
-  color: #fff;
+  color: var(--td-text-color-anti);
   font-size: var(--mc-fs-sm);
 }
 
 .app-side__username {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--mc-sp-2);
   font-size: var(--mc-fs-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* ≥768：侧栏回到左侧竖栏。
+   宽度取 224：内边距 12×2 后内容宽 200，放得下「用户名 + admin 标签」；
+   同时是 8 与 16 的整倍数（200 是原值，英文导航 + 计数徽标偏挤）。 */
+@media (min-width: 768px) {
+  .app-shell {
+    flex-direction: row;
+  }
+
+  .app-side {
+    width: 224px;
+    height: 100%;
+    flex-wrap: nowrap;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--mc-sp-5);
+    padding: var(--mc-sp-4) var(--mc-sp-3);
+    border-bottom: none;
+    border-right: 1px solid var(--mc-hairline);
+  }
+
+  .app-side__brand {
+    padding: var(--mc-sp-1) var(--mc-sp-2);
+  }
+
+  .app-side__section {
+    display: block;
+    margin: 0 var(--mc-sp-2) calc(var(--mc-sp-2) * -1);
+  }
+
+  .app-side__nav {
+    order: 0;
+    flex: 1;
+    flex-basis: auto;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: var(--mc-sp-1);
+  }
+
+  .app-side__status {
+    display: flex;
+  }
+
+  .app-side__foot {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--mc-sp-2);
+    border-top: 1px solid var(--mc-hairline);
+    padding-top: var(--mc-sp-3);
+  }
+
+  .app-side__user {
+    display: flex;
+  }
+}
+
 /* 主区 */
 .app-main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
+/* 顶栏：高度 56（= 48 + 8，4pt 对齐），左右留白 = 槽宽 */
 .app-top {
+  flex-shrink: 0;
+  height: calc(var(--mc-sp-12) + var(--mc-sp-2));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 24px;
+  gap: var(--mc-sp-3);
+  padding: 0 var(--mc-gutter);
   border-bottom: 1px solid var(--mc-hairline);
   background: var(--td-bg-color-container);
 }
@@ -328,10 +401,21 @@ async function logout() {
 .app-top__crumb {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--mc-sp-2);
   min-width: 0;
   font-size: var(--mc-fs-sm);
   color: var(--td-text-color-placeholder);
+}
+
+/* <768 顶栏上方就是带品牌的顶部栏，面包屑只留当前页名 */
+.app-top__crumb > span {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .app-top__crumb > span {
+    display: inline;
+  }
 }
 
 .app-top__crumb strong {
@@ -344,11 +428,12 @@ async function logout() {
 }
 
 .app-top__lang {
+  height: var(--mc-ctl-sm);
   border: 1px solid var(--mc-hairline);
   background: transparent;
   color: var(--td-text-color-secondary);
   font-size: var(--mc-fs-sm);
-  padding: 4px 10px;
+  padding: 0 var(--mc-sp-3);
   border-radius: var(--mc-radius-sm);
   cursor: pointer;
   transition:
@@ -361,9 +446,10 @@ async function logout() {
   color: var(--td-text-color-primary);
 }
 
+/* 留白与限宽交给视图根节点的 .mc-page--wide */
 .app-content {
   flex: 1;
-  padding: 24px;
+  min-height: 0;
   overflow: auto;
 }
 </style>
